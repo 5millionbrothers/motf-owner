@@ -55,7 +55,7 @@
   }
 
   async function load() {
-    if (!window.motfSupabase || !window.motfCurrentBusiness || window.motfCurrentProfile?.role !== "partner") return;
+    if (!window.motfSupabase || !window.motfCurrentBusiness || !window.motfHasBusinessPermission?.("settlements")) return;
     const container = $("#revenueSubContent");
     if (container) container.innerHTML = '<div class="owner-loading-state">매출 데이터를 불러오는 중입니다.</div>';
     const { data, error } = await window.motfSupabase.rpc("list_own_partner_settlements");

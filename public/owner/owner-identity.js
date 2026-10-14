@@ -21,8 +21,8 @@
     return result;
   }
 
-  async function verify(purpose) {
-    const email = purpose === "password_reset"
+  async function verify(purpose, accessToken = "") {
+    const email = purpose === "profile_upgrade" ? window.motfCurrentProfile?.login_email || "" : purpose === "password_reset"
       ? document.getElementById("ownerResetEmail").value.trim()
       : document.getElementById("signupId").value.trim();
     if (purpose === "password_reset" && !email) throw new Error("가입 아이디 또는 기존 가입 이메일을 먼저 입력해주세요.");
@@ -31,7 +31,7 @@
     popup.document.write("<!doctype html><html lang='ko'><meta charset='utf-8'><title>본인인증 연결 중</title><body style='font-family:sans-serif;padding:32px;text-align:center'>본인인증 화면을 연결하고 있습니다.</body></html>");
     let start;
     try {
-      start = await api("/api/identity-start", { purpose, email, accountType:"partner", returnUrl:location.href, mobile:innerWidth<720 });
+      start = await api("/api/identity-start", { purpose, email, accountType:"partner", returnUrl:location.href, mobile:innerWidth<720 }, accessToken);
     } catch(error) {
       popup.close();
       throw error;
@@ -44,6 +44,7 @@
       const timer=setTimeout(() => { cleanup(); reject(new Error("인증 시간이 만료되었습니다.")); },600000);
       const listener=async(event) => {
         if(event.origin!==API_BASE) return;
+        if(event.source!==popup) return;
         if(event.data?.type!=="motf:kcp-identity") return;
         cleanup();
         if(!event.data.ok) return reject(new Error(event.data.message||"본인인증에 실패했습니다."));
@@ -53,6 +54,15 @@
       addEventListener("message",listener);
     });
   }
+
+  window.motfVerifyBusinessTransfer = async function(transferId) {
+    const { data, error } = await window.motfSupabase.auth.getSession();
+    if (error || !data.session?.access_token) throw new Error("로그인이 필요합니다.");
+    const identity = await verify("profile_upgrade", data.session.access_token);
+    const { data: fresh } = await window.motfSupabase.auth.getSession();
+    if (!fresh.session?.access_token) throw new Error("로그인이 만료되었습니다.");
+    await api("/api/business-transfer-verify", { identityToken: identity.token, transferId }, fresh.session.access_token);
+  };
 
   window.startOwnerIdentity = async function(purpose) {
     try {

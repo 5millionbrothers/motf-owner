@@ -16,13 +16,36 @@ async function authenticatedUser(authorization: string) {
     cache: "no-store",
   });
   const body = await readJson(response);
-  if (!response.ok || !body?.id) throw new Error("로그인이 만료되었습니다.");
+  if (!response.ok || !body?.id) throw Object.assign(new Error("로그인이 만료되었습니다."), { statusCode: 401 });
   return body;
+}
+
+async function ensureListingPermission(businessId: string, userId: string, authorization: string) {
+  const response = await fetch(`${env("NEXT_PUBLIC_SUPABASE_URL")}/rest/v1/rpc/has_business_permission`, {
+    method: "POST",
+    headers: { apikey: env("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"), Authorization: authorization, "Content-Type": "application/json" },
+    body: JSON.stringify({ target_business_id: businessId, permission: "listing" }),
+    cache: "no-store",
+  });
+  const permitted = await readJson(response);
+  if (!response.ok) throw new Error(permitted?.message || "업장 권한을 확인하지 못했습니다.");
+  if (permitted === true) return;
+  if (permitted === false) {
+    const profileCheck = await fetch(`${env("NEXT_PUBLIC_SUPABASE_URL")}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role,status,withdrawal_processed_at&limit=1`, {
+      headers: { apikey: env("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"), Authorization: authorization },
+      cache: "no-store",
+    });
+    const profiles = await readJson(profileCheck);
+    if (!profileCheck.ok) throw new Error(profiles?.message || "업장 권한을 확인하지 못했습니다.");
+    if (profiles?.[0]?.role === "admin" && profiles[0].status === "approved" && !profiles[0].withdrawal_processed_at) return;
+  }
+  throw Object.assign(new Error("업장 등록정보 관리 권한이 필요합니다."), { statusCode: 403 });
 }
 
 export async function POST(request: NextRequest) {
   try {
     const authorization = request.headers.get("authorization") || "";
+    if (!authorization.startsWith("Bearer ")) return NextResponse.json({ message: "로그인이 필요합니다." }, { status: 401 });
     const user = await authenticatedUser(authorization);
     const body = await request.json();
     const businessNumber = String(body.businessNumber || "").replace(/\D/g, "");
@@ -33,8 +56,7 @@ export async function POST(request: NextRequest) {
     if (!env("DATA_GO_KR_SERVICE_KEY")) return NextResponse.json({ message: "공공데이터포털 서비스키가 설정되지 않았습니다." }, { status: 503 });
     if (!env("SUPABASE_SERVICE_ROLE_KEY")) return NextResponse.json({ message: "사업자 인증 서버 권한이 설정되지 않았습니다." }, { status: 503 });
 
-    // Authorize with the caller's token so the existing businesses RLS policy is
-    // the single source of truth for both partners and administrators.
+    // Workspace read access is not sufficient to change registration data.
     const ownerCheck = await fetch(`${env("NEXT_PUBLIC_SUPABASE_URL")}/rest/v1/businesses?id=eq.${encodeURIComponent(businessId)}&select=id,owner_id&limit=1`, {
       headers: { apikey: env("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"), Authorization: authorization },
       cache: "no-store",
@@ -42,16 +64,7 @@ export async function POST(request: NextRequest) {
     const ownerRows = await readJson(ownerCheck);
     if (!ownerCheck.ok) return NextResponse.json({ message: ownerRows?.message || "업장 권한을 확인하지 못했습니다." }, { status: 502 });
     if (!Array.isArray(ownerRows) || !ownerRows.length) return NextResponse.json({ message: "이 업장을 확인할 권한이 없습니다." }, { status: 403 });
-    if (ownerRows[0].owner_id !== user.id) {
-      const profileCheck = await fetch(`${env("NEXT_PUBLIC_SUPABASE_URL")}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=role,status&limit=1`, {
-        headers: { apikey: env("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"), Authorization: authorization },
-        cache: "no-store",
-      });
-      const profileRows = await readJson(profileCheck);
-      if (!profileCheck.ok || profileRows?.[0]?.role !== "admin" || profileRows?.[0]?.status !== "approved") {
-        return NextResponse.json({ message: "이 업장을 확인할 권한이 없습니다." }, { status: 403 });
-      }
-    }
+    await ensureListingPermission(businessId, user.id, authorization);
 
     const statusResponse = await fetch(`https://api.odcloud.kr/api/nts-businessman/v1/status?serviceKey=${encodeURIComponent(env("DATA_GO_KR_SERVICE_KEY"))}`, {
       method: "POST",
@@ -75,6 +88,7 @@ export async function POST(request: NextRequest) {
     if (!validationResponse.ok || !validation) return NextResponse.json({ message: "국세청 진위확인 응답을 받지 못했습니다." }, { status: 502 });
     if (String(validation.valid) !== "01") return NextResponse.json({ message: validation.valid_msg || "대표자명 또는 개업일자가 국세청 등록정보와 일치하지 않습니다." }, { status: 409 });
 
+    await ensureListingPermission(businessId, user.id, authorization);
     const updateResponse = await fetch(`${env("NEXT_PUBLIC_SUPABASE_URL")}/rest/v1/businesses?id=eq.${encodeURIComponent(businessId)}`, {
       method: "PATCH",
       headers: {
@@ -97,6 +111,6 @@ export async function POST(request: NextRequest) {
     if (!updateResponse.ok) return NextResponse.json({ message: updateBody?.message || "확인 결과를 업장 정보에 저장하지 못했습니다." }, { status: 502 });
     return NextResponse.json({ ok: true, status: result.b_stt, taxType: result.tax_type, verified: true });
   } catch (error) {
-    return NextResponse.json({ message: error instanceof Error ? error.message : "사업자 상태 확인에 실패했습니다." }, { status: 500 });
+    return NextResponse.json({ message: error instanceof Error ? error.message : "사업자 상태 확인에 실패했습니다." }, { status: (error as Error & { statusCode?: number }).statusCode || 500 });
   }
 }

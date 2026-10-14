@@ -38,7 +38,7 @@ async function ensureUser(authorization: string) {
     cache: "no-store",
   });
   const data = await readJson(response);
-  if (!response.ok || !data?.id) throw new Error("로그인이 만료되었습니다.");
+  if (!response.ok || !data?.id) throw Object.assign(new Error("로그인이 만료되었습니다."), { statusCode: 401 });
   return data;
 }
 
@@ -59,17 +59,28 @@ async function setTransactionStatus(kind: TransactionKind, id: string, status: "
 async function ensureTransactionAccess(kind: TransactionKind, id: string, authorization: string) {
   const table = kind === "stay" ? "reservations" : "market_orders";
   const rows = await supabaseRequest(
-    `/rest/v1/${table}?select=id,status&id=eq.${encodeURIComponent(id)}&limit=1`,
+    `/rest/v1/${table}?select=id,business_id,status&id=eq.${encodeURIComponent(id)}&limit=1`,
     publicKey(),
     { headers: { Authorization: authorization } },
   );
-  if (!Array.isArray(rows) || !rows.length) throw new Error("이 거래를 처리할 권한이 없습니다.");
+  if (!Array.isArray(rows) || !rows.length) throw Object.assign(new Error("이 거래를 처리할 권한이 없습니다."), { statusCode: 403 });
   return rows[0];
 }
 
 async function ensureAdmin(userId: string) {
-  const rows = await supabaseRequest(`/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role&limit=1`, serviceKey());
-  if (!Array.isArray(rows) || rows[0]?.role !== "admin") throw new Error("운영자 권한이 필요합니다.");
+  const rows = await supabaseRequest(`/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=role,status,withdrawal_processed_at&limit=1`, serviceKey());
+  if (!Array.isArray(rows) || rows[0]?.role !== "admin" || rows[0]?.status !== "approved" || rows[0]?.withdrawal_processed_at) {
+    throw Object.assign(new Error("운영자 권한이 필요합니다."), { statusCode: 403 });
+  }
+}
+
+async function ensureReservationPermission(businessId: string, userId: string, authorization: string) {
+  const permitted = await userRpc("/rest/v1/rpc/has_business_permission", authorization, {
+    target_business_id: businessId, permission: "reservations",
+  });
+  if (permitted === true) return;
+  if (permitted === false) return ensureAdmin(userId);
+  throw Object.assign(new Error("예약 관리 권한이 필요합니다."), { statusCode: 403 });
 }
 
 async function writeAudit(userId: string, actionType: string, kind: TransactionKind, id: string, reason: string, details: unknown) {
@@ -119,9 +130,12 @@ export async function POST(request: NextRequest) {
     const reason = String(body?.reason || (action === "cancel" ? "운영팀 예약 취소" : "사장님/운영팀 요청 거절")).trim().slice(0, 200);
     if (!kind || !id) return json(400, { ok: false, message: "거래 종류와 거래 ID가 필요합니다." });
     const transaction = await ensureTransactionAccess(kind, id, authorization);
+    await ensureReservationPermission(transaction.business_id, user.id, authorization);
     if (action === "cancel") {
       await ensureAdmin(user.id);
       if (transaction.status !== "confirmed") return json(409, { ok: false, message: "확정 상태의 거래만 운영팀에서 취소할 수 있습니다." });
+    } else if (!["pending", "confirmed"].includes(transaction.status)) {
+      return json(409, { ok: false, message: "종료된 거래는 거절할 수 없습니다." });
     }
 
     const rows = await supabaseRequest([
@@ -129,6 +143,7 @@ export async function POST(request: NextRequest) {
       `&kind=eq.${encodeURIComponent(kind)}&transaction_id=eq.${encodeURIComponent(id)}&status=eq.confirmed&limit=1`,
     ].join(""), serviceKey());
     const intent = Array.isArray(rows) ? rows[0] : null;
+    await ensureReservationPermission(transaction.business_id, user.id, authorization);
 
     if (!intent?.payment_key) {
       await setTransactionStatus(kind, id, requestedStatus, reason, authorization);
@@ -150,6 +165,8 @@ export async function POST(request: NextRequest) {
         : "TOSS_STAY_SECRET_KEY 또는 TOSS_SECRET_KEY";
       return json(503, { ok: false, message: `환경변수가 없습니다: ${variableName}` });
     }
+    // Recheck after payment lookup; this does not make revocation and Toss atomic.
+    await ensureReservationPermission(transaction.business_id, user.id, authorization);
     const result = externalAmount > 0
       ? await tossCancel(intent.payment_key, reason, externalAmount, `motf-${action}-${kind}-${id}`, secretKey)
       : { status: "POINT_ONLY_REFUND" };
@@ -173,6 +190,6 @@ export async function POST(request: NextRequest) {
     return json(200, { ok: true, action, refundStatus: "refunded", message: `${action === "cancel" ? "취소" : "거절"} 및 전액 환불이 완료되었습니다.${pointAmount ? ` ${pointAmount.toLocaleString("ko-KR")}P도 복구됩니다.` : ""}` });
   } catch (error) {
     console.error("refund-transaction", error);
-    return json(502, { ok: false, message: (error as Error).message || "자동 환불 처리에 실패했습니다." });
+    return json((error as Error & { statusCode?: number }).statusCode || 502, { ok: false, message: (error as Error).message || "자동 환불 처리에 실패했습니다." });
   }
 }

@@ -9,3 +9,22 @@
   .sidebar > [data-business-workspace] { padding: 8px 16px; }
   [data-business-workspace] select { font-size: 12px; }
 }
+#motfWorkspaceManagement { margin-bottom: 24px; border-bottom: 1px solid var(--line); padding-bottom: 24px; }
+#motfWorkspaceManagement form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 12px 0 24px; }
+#motfWorkspaceManagement label { display: flex; flex-direction: column; gap: 6px; max-width: 100%; }
+#motfWorkspaceManagement input:not([type=checkbox]), #motfWorkspaceManagement select { padding: 10px; border: 1px solid var(--line); border-radius: 6px; max-width: 100%; }
+#motfWorkspaceManagement fieldset { display: flex; flex-wrap: wrap; gap: 12px; border: 0; padding: 0; margin: 8px 0; }
+#motfWorkspaceManagement fieldset label { flex-direction: row; align-items: center; }
+#motfWorkspaceManagement .workspace-member { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
+#motfWorkspaceManagement .workspace-member small { color: var(--muted); }
+#motfWorkspaceManagement [role=status] { overflow-wrap: anywhere; }
+#admin-main [hidden] { display: none !important; }
+@media (max-width: 720px) { #motfWorkspaceManagement form > label { width: 100%; } #motfWorkspaceManagement .workspace-member fieldset { flex-basis: 100%; } }
+#motfAdminOrganizationHandoff { margin: 20px 0 28px; padding: 16px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.motf-admin-handoff-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.motf-admin-handoff-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.motf-admin-handoff-form label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.motf-admin-handoff-form input, .motf-admin-handoff-form select, .motf-admin-handoff-form textarea { width: 100%; max-width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.motf-admin-handoff-form label:has(textarea) { grid-column: span 2; }
+#motfAdminOrganizationHandoff p { overflow-wrap: anywhere; }
+@media (max-width: 720px) { .motf-admin-handoff-form { grid-template-columns: minmax(0, 1fr); } .motf-admin-handoff-form label:has(textarea) { grid-column: auto; } }

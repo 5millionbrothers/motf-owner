@@ -1285,10 +1285,10 @@
   }
 
   window.loadMotfPartnerBusiness = function loadMotfPartnerBusiness(business) {
-    if (!business) return;
+    if (!business || !window.motfHasBusinessPermission?.("listing")) return;
     ensurePartnerFields();
     populateOwnerAccountFields();
-    client().from("business_settlement_accounts")
+    if (window.motfIsBusinessRepresentative()) client().from("business_settlement_accounts")
       .select("business_id,bank_name,account_number,account_holder,updated_at")
       .eq("business_id", business.id)
       .maybeSingle()
@@ -1397,9 +1397,11 @@
       window.motfUpdateListingReviewUi?.();
     };
     loadOfferings();
+    window.motfApplyWorkspacePermissions?.();
   };
 
   window.saveMypageData = async function saveMypageDataToDatabase() {
+    if (!window.motfHasBusinessPermission?.("listing")) return;
     const business = window.motfCurrentBusiness;
     if (!business || !client()) {
       return originalSaveMypageData?.();
@@ -1448,7 +1450,7 @@
     const marketPolicyPayload = business.business_type === "market"
       ? { ...readMarketPolicyFromInputs(), updated_at: new Date().toISOString() }
       : null;
-    const hasSettlementValue = Boolean(settlementPayload.bank_name || settlementPayload.account_number || settlementPayload.account_holder);
+    const hasSettlementValue = window.motfIsBusinessRepresentative() && Boolean(settlementPayload.bank_name || settlementPayload.account_number || settlementPayload.account_holder);
 
     const offeringItems = (window.motfReadOfferingsFromDashboard?.() || []).map((item, index) => ({
       ...item,
@@ -1499,10 +1501,10 @@
             proposed_offerings: offeringItems,
             requested_type: "listing_update",
           }),
-          ownerPhone
+          ownerPhone && window.motfIsBusinessRepresentative()
             ? client().from("profiles").update({ phone: ownerPhone, updated_at: new Date().toISOString() }).eq("id", window.motfCurrentProfile?.id)
             : Promise.resolve({ error: null }),
-          hasSettlementValue
+          hasSettlementValue && window.motfHasBusinessPermission("settlements")
             ? client().from("business_settlement_accounts").upsert(settlementPayload, { onConflict: "business_id" })
             : Promise.resolve({ error: null }),
           marketPolicyPayload
@@ -1512,7 +1514,7 @@
         if (reviewResult.error || profileResult.error || settlementResult.error || marketPolicyResult.error) {
           throw reviewResult.error || profileResult.error || settlementResult.error || marketPolicyResult.error;
         }
-        if (hasSettlementValue) window.motfCurrentSettlementAccount = settlementPayload;
+        if (hasSettlementValue && window.motfHasBusinessPermission("settlements")) window.motfCurrentSettlementAccount = settlementPayload;
         if (marketPolicyPayload) window.motfCurrentBusiness = { ...window.motfCurrentBusiness, ...marketPolicyPayload };
         if (window.motfCurrentProfile && ownerPhone) window.motfCurrentProfile.phone = ownerPhone;
         alert("변경 승인 요청을 보냈습니다. 운영팀 승인 전까지 현재 공개 정보가 유지됩니다.");
@@ -1530,10 +1532,10 @@
           target_business_id: business.id,
           items: offeringItems,
         }) : Promise.resolve({ error: null }),
-        ownerPhone
+        ownerPhone && window.motfIsBusinessRepresentative()
           ? client().from("profiles").update({ phone: ownerPhone, updated_at: new Date().toISOString() }).eq("id", window.motfCurrentProfile?.id)
           : Promise.resolve({ error: null }),
-        hasSettlementValue
+        hasSettlementValue && window.motfHasBusinessPermission("settlements")
           ? client().from("business_settlement_accounts").upsert(settlementPayload, { onConflict: "business_id" })
           : Promise.resolve({ error: null }),
         marketPolicyPayload
@@ -1552,7 +1554,7 @@
 
       const data = refreshed.data;
       window.motfCurrentBusiness = data;
-      if (hasSettlementValue) window.motfCurrentSettlementAccount = settlementPayload;
+      if (hasSettlementValue && window.motfHasBusinessPermission("settlements")) window.motfCurrentSettlementAccount = settlementPayload;
       if (window.motfCurrentProfile && ownerPhone) window.motfCurrentProfile.phone = ownerPhone;
       window.motfApplyBusinessToDashboard?.(data);
       window.motfSetPartnerOnboarding?.(false);
@@ -2065,6 +2067,7 @@
   }
 
   async function renderAvailabilityManager(scope, businessId = null) {
+    if (scope === "partner" && !window.motfHasBusinessPermission?.("availability")) return;
     const targetId = scope === "master" ? "masterOrderListArea" : "orderListArea";
     const list = document.getElementById(targetId);
     if (!list) return;
@@ -2089,6 +2092,7 @@
   window.motfRenderAvailabilityManager = renderAvailabilityManager;
 
   window.motfSetMarketProductAvailability = async function motfSetMarketProductAvailability(offeringId, isActive) {
+    if (!window.motfHasBusinessPermission?.("availability")) return;
     if (!client() || window.motfCurrentBusiness?.business_type !== "market") return;
     const message = isActive ? "이 상품을 다시 판매 상태로 바꿀까요?" : "이 상품을 품절·숨김 처리할까요?";
     if (!confirm(message)) return;
@@ -2108,6 +2112,7 @@
   };
 
   window.motfOpenAvailabilityForDate = async function openAvailabilityForDate(date, offeringId = "") {
+    if (!window.motfHasBusinessPermission?.("availability")) return;
     window.switchPanel?.("availability");
     await renderAvailabilityManager("partner", window.motfCurrentBusiness?.id);
     const start = document.getElementById("partnerAvailabilityStart");
@@ -2122,6 +2127,7 @@
   };
 
   window.motfCreateAvailabilityBlock = async function motfCreateAvailabilityBlock(scope) {
+    if (window.motfCurrentProfile?.role !== "admin" && !window.motfHasBusinessPermission?.("availability")) return;
     const offeringId = document.getElementById(`${scope}AvailabilityOffering`)?.value;
     const startDate = document.getElementById(`${scope}AvailabilityStart`)?.value;
     const endDate = document.getElementById(`${scope}AvailabilityEnd`)?.value;
@@ -2147,6 +2153,7 @@
   };
 
   window.motfCancelAvailabilityBlock = async function motfCancelAvailabilityBlock(blockId, scope) {
+    if (window.motfCurrentProfile?.role !== "admin" && !window.motfHasBusinessPermission?.("availability")) return;
     if (!confirm("이 수동 품절 처리를 해제할까요?")) return;
     const { error } = await client().rpc("cancel_stay_availability_block", {
       target_block_id: blockId,
@@ -2161,19 +2168,21 @@
   };
 
   window.loadMotfPartnerTransactions = async function loadMotfPartnerTransactions(business = window.motfCurrentBusiness) {
-    if (!client() || !business) return;
+    if (!client() || !business || !window.motfHasBusinessPermission?.("reservations")) return;
     await syncCommissionSettings();
     const table = business.business_type === "market" ? "market_orders" : "reservations";
     const fields = business.business_type === "market"
       ? "id, customer_name, pickup_time, total_amount, status, reject_reason, refund_status, refund_amount, created_at, market_order_items(item_name, quantity)"
       : "id, customer_name, group_name, event_date, offering_name, total_amount, status, reject_reason, refund_status, refund_amount";
     const { data, error } = await client().from(table).select(fields).eq("business_id", business.id).order("created_at", { ascending: false });
+    if (window.motfCurrentBusiness?.id !== business.id || !window.motfHasBusinessPermission("reservations")) return;
     if (error) return console.error(error);
     await client().rpc("release_expired_checkout_intents");
     const { data: pendingIntents, error: pendingIntentError } = await client().rpc("list_pending_payment_intents", {
       target_business_id: business.id,
     });
     if (pendingIntentError) console.warn("Could not load pending payment intents.", pendingIntentError);
+    if (window.motfCurrentBusiness?.id !== business.id || !window.motfHasBusinessPermission("reservations")) return;
     const pendingPaymentRows = (pendingIntents || [])
       .filter((item) => item.kind === (business.business_type === "market" ? "market" : "stay"))
       .map((item) => pendingIntentToTransaction(item, item.business_name || business.business_name));
@@ -2213,11 +2222,11 @@
       "rev-settled-val": Math.floor(settled * (1 - rate)),
       "rev-expected-val": Math.floor(expected * (1 - rate)),
     };
-    Object.entries(values).forEach(([id, value]) => {
+    if (window.motfHasBusinessPermission("settlements")) Object.entries(values).forEach(([id, value]) => {
       const node = document.getElementById(id);
       if (node) node.textContent = `${value.toLocaleString()}원`;
     });
-    if (business.business_type === "stay") {
+    if (business.business_type === "stay" && window.motfHasBusinessPermission("availability")) {
       const availability = await loadStayAvailabilityData(business.id);
       window.motfApplyAvailabilityCalendarData?.(availability);
     } else {
@@ -2474,6 +2483,7 @@
   };
 
   window.motfProcessTransaction = async function motfProcessTransaction(kind, id, status) {
+    if (window.motfCurrentProfile?.role !== "admin" && !window.motfHasBusinessPermission?.("reservations")) return;
     if (isMarketDemoId(id)) {
       let reason = null;
       if (["rejected", "cancelled"].includes(status)) {
@@ -2629,7 +2639,7 @@
   }
 
   function isPartnerChatVisible() {
-    return window.motfCurrentProfile?.role === "partner"
+    return window.motfPortalActive && window.motfHasBusinessPermission?.("chat")
       && currentActivePanel === "chat"
       && document.visibilityState === "visible"
       && Boolean(selectedPartnerConversationId());
@@ -2687,7 +2697,7 @@
 
   window.loadMotfPartnerChats = async function loadMotfPartnerChats(business = window.motfCurrentBusiness) {
     const version = ++partnerChatLoadVersion;
-    if (!client() || !business) return;
+    if (!client() || !business || !window.motfHasBusinessPermission?.("chat")) return;
     const selectedConversationId = selectedPartnerConversationId();
     const { data: supportConversationId, error: supportStartError } = await client().rpc("start_support_conversation");
     if (supportStartError) console.warn("Could not prepare support conversation.", supportStartError);
@@ -2742,6 +2752,7 @@
   };
 
   window.sendChatMessage = async function sendDatabaseChatMessage() {
+    if (window.motfPortalActive && !window.motfHasBusinessPermission?.("chat")) return;
     if (!window.motfCurrentBusiness) return originalSendChatMessage?.();
     const input = document.getElementById("chatMessageInput");
     const text = input?.value.trim();
@@ -2768,6 +2779,7 @@
   };
 
   window.motfOpenPartnerTransactionChat = async function (transactionId) {
+    if (!window.motfHasBusinessPermission?.("chat")) return;
     const demo = mockData[currentOwnerType]?.orders?.find((order) => String(order.id) === String(transactionId));
     if (!client() || !window.motfCurrentBusiness || isDemoTransactionId(transactionId)) return window.goToUserChat?.(demo?.user || "");
     const savedTransaction = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(String(transactionId));
@@ -2993,6 +3005,14 @@
     else stopPartnerPresence();
   });
   window.addEventListener("pagehide", stopPartnerPresence);
+  window.addEventListener("motf:owner-workspace-clear", () => {
+    partnerTransactions = [];
+    partnerChatLoadVersion += 1;
+    stopPartnerPresence();
+    ['stay', 'market'].forEach((type) => {
+      if (mockData[type]) { mockData[type].orders = []; mockData[type].chats = []; }
+    });
+  });
 
   function formatPhoneInput(value = "") {
     const digits = String(value || "").replace(/\D/g, "").slice(0, 11);

@@ -8,9 +8,18 @@
   let lastLoadedAt = 0;
   let loadingPromise = null;
   let realtimeTimer = 0;
+  let workspaceVersion = 0;
+  window.addEventListener('motf:owner-workspace-clear', () => {
+    workspaceVersion += 1;
+    reviews = []; settlements = []; transactions = []; offerings = []; availabilityBlocks = []; conversations = [];
+    lastLoadedAt = 0;
+    loadingPromise = null;
+    window.clearTimeout(realtimeTimer);
+  });
 
   const $ = (selector) => document.querySelector(selector);
   const client = () => window.motfSupabase;
+  const can = (cap) => Boolean(window.motfHasBusinessPermission?.(cap));
   const money = (value) => `${Number(value || 0).toLocaleString("ko-KR")}원`;
   const date = (value) => value ? new Date(value).toLocaleDateString("ko-KR") : "-";
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -95,9 +104,15 @@
       ...(demo.settlements || []),
       ...settlements.filter((item) => !isStarDemoId(item.transaction_id)),
     ];
+    if (!can("reservations")) transactions = [];
+    if (!can("chat")) conversations = [];
+    if (!can("listing")) reviews = [];
+    if (!can("settlements")) settlements = [];
   }
 
   async function loadTransactions(business) {
+    const version = workspaceVersion;
+    if (!can("reservations")) { transactions = []; return; }
     const isMarket = business.business_type === "market";
     const table = isMarket ? "market_orders" : "reservations";
     const fields = isMarket
@@ -106,6 +121,7 @@
     const { data, error } = await client().from(table).select(fields)
       .eq("business_id", business.id).order("created_at", { ascending: false }).limit(300);
     if (error) throw error;
+    if (version !== workspaceVersion || !can("reservations")) return;
     transactions = (data || []).map((item) => ({
       ...item,
       kind: isMarket ? "market" : "stay",
@@ -133,11 +149,14 @@
   }
 
   async function loadOfferingsAndAvailability(business) {
+    const version = workspaceVersion;
+    if (!can("availability") && !can("listing")) { offerings = []; availabilityBlocks = []; return; }
     const offeringResult = await client().from("offerings").select("id,name,is_active")
       .eq("business_id", business.id).order("sort_order");
     if (offeringResult.error) throw offeringResult.error;
+    if (version !== workspaceVersion) return;
     offerings = offeringResult.data || [];
-    if (business.business_type !== "stay") {
+    if (business.business_type !== "stay" || !can("availability")) {
       availabilityBlocks = [];
       return;
     }
@@ -146,26 +165,33 @@
       .eq("business_id", business.id).eq("status", "active")
       .gte("end_date", new Date().toISOString().slice(0, 10)).order("start_date").limit(500);
     if (blockResult.error) throw blockResult.error;
+    if (version !== workspaceVersion || !can("availability")) return;
     availabilityBlocks = blockResult.data || [];
+    window.motfApplyAvailabilityCalendarData?.({ offerings, blocks: availabilityBlocks });
   }
 
   async function loadConversations(business) {
+    const version = workspaceVersion;
+    if (!can("chat")) { conversations = []; return; }
     const { data, error } = await client().from("conversations")
       .select("id,customer_name,group_name,last_message_at")
       .eq("business_id", business.id).order("last_message_at", { ascending: false }).limit(100);
     if (error) throw error;
+    if (version !== workspaceVersion || !can("chat")) return;
     conversations = data || [];
   }
 
   window.motfLoadPartnerReviews = async function loadPartnerReviews(force = false) {
+    const version = workspaceVersion;
     const business = window.motfCurrentBusiness;
-    if (!client() || !business || window.motfCurrentProfile?.role !== "partner") return;
+    if (!client() || !business || !can("listing")) { reviews = []; return; }
     if (!force && reviews.length) return renderReviews();
     const target = $("#ownerReviewList");
     if (target) target.innerHTML = '<div class="owner-loading-state">리뷰를 불러오는 중입니다.</div>';
     const { data, error } = await client().from("reviews")
       .select("id,author_name,rating,body,tags,image_urls,structured_scores,comfortable_people_min,comfortable_people_max,recommend_30_plus,organizer_difficulty,is_hidden,created_at")
       .eq("business_id", business.id).order("created_at", { ascending: false }).limit(300);
+    if (version !== workspaceVersion || !can("listing")) return;
     if (error) {
       if (target) target.innerHTML = empty(`리뷰를 불러오지 못했습니다: ${error.message}`);
       return;
@@ -220,11 +246,13 @@
   window.motfRenderPartnerReviews = renderReviews;
 
   window.motfLoadPartnerSettlements = async function loadPartnerSettlements(force = false) {
-    if (!client() || !window.motfCurrentBusiness || window.motfCurrentProfile?.role !== "partner") return;
+    const version = workspaceVersion;
+    if (!client() || !window.motfCurrentBusiness || !can("settlements")) { settlements = []; return; }
     if (!force && settlements.length) return renderSettlements();
     const target = $("#ownerSettlementList");
     if (target) target.innerHTML = '<div class="owner-loading-state">정산 내역을 불러오는 중입니다.</div>';
     const { data, error } = await client().rpc("list_own_partner_settlements");
+    if (version !== workspaceVersion || !can("settlements")) return;
     if (error) {
       if (target) target.innerHTML = empty(`정산 내역을 불러오지 못했습니다. DB 62번 적용 여부를 확인해주세요. (${error.message})`);
       return;
@@ -308,7 +336,7 @@
       statCard("최근 24시간 문의", `${recentChats.length}건`, `전체 채팅 ${conversations.length}개`),
       statCard("이용자 평점", visibleReviews.length ? `${average.toFixed(1)} / 5` : "리뷰 없음", `${visibleReviews.length}개 리뷰`),
       statCard("정산 예정", money(pendingPayout), `${settlements.filter((item) => item.status === "pending").length}건`, "is-accent"),
-    ].join("");
+    ].filter((_, index) => can(["reservations", "reservations", "chat", "listing", "settlements"][index])).join("");
 
     const pendingCards = pending.slice(0, 5).map((item) => {
       const kind = item.kind || (business.business_type === "market" ? "market" : "stay");
@@ -341,7 +369,7 @@
     if (isMarket && offerings.some((item) => item.is_active === false)) tasks.push({ icon: "package-x", title: `품절·숨김 상품 ${offerings.filter((item) => item.is_active === false).length}개`, body: "판매 재개가 가능한 상품이 있으면 재고·품절 관리에서 상태를 바꿔주세요.", panel: "availability", action: "상품 상태 보기" });
     const lowReviews = visibleReviews.filter((review) => rating5(review.rating) <= 3);
     if (lowReviews.length) tasks.push({ icon: "message-square-warning", title: `확인이 필요한 리뷰 ${lowReviews.length}건`, body: "3점 이하 후기를 살펴보고 운영 개선에 반영해보세요.", panel: "reviews", action: "리뷰 보기" });
-    const taskLinks = tasks.filter((task) => task.panel !== "orders").map((task) => `<button type="button" class="owner-task-row" onclick="switchPanel('${task.panel}')"><i data-lucide="${task.icon}"></i><span><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(task.body)}</small></span><b>${escapeHtml(task.action)} <i data-lucide="chevron-right"></i></b></button>`).join("");
+    const taskLinks = tasks.filter((task) => task.panel !== "orders" && window.motfCanOpenOwnerPanel(task.panel)).map((task) => `<button type="button" class="owner-task-row" onclick="switchPanel('${task.panel}')"><i data-lucide="${task.icon}"></i><span><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(task.body)}</small></span><b>${escapeHtml(task.action)} <i data-lucide="chevron-right"></i></b></button>`).join("");
     $("#ownerOperationsTasks").innerHTML = pendingCards
       ? `<div class="owner-urgent-list">${pendingCards}</div>${taskLinks ? `<div class="owner-secondary-task-list">${taskLinks}</div>` : ""}`
       : `<div class="owner-all-clear"><i data-lucide="circle-check-big"></i><div><strong>지금 바로 승인할 예약은 없습니다.</strong><p>새로운 예약 요청이 들어오면 이곳에 먼저 표시됩니다.</p></div></div>${taskLinks ? `<div class="owner-secondary-task-list">${taskLinks}</div>` : ""}`;
@@ -356,6 +384,9 @@
       [Boolean(settlement.bank_name && settlement.account_number && settlement.account_holder), "정산 계좌 등록"],
     ];
     $("#ownerBusinessHealth").innerHTML = checks.map(([done, label]) => `<div class="${done ? "done" : "todo"}"><i data-lucide="${done ? "check" : "circle"}"></i><span>${escapeHtml(label)}</span><b>${done ? "완료" : "확인 필요"}</b></div>`).join("");
+    $("#ownerBusinessHealth").parentElement.hidden = !can("listing");
+    if (!window.motfIsBusinessRepresentative()) $("#ownerBusinessHealth").lastElementChild?.remove();
+    if (!can("reservations")) $("#ownerOperationsTasks").innerHTML = taskLinks || empty("현재 처리할 문의가 없습니다.");
 
     const activities = [
       ...transactions.slice(0, 5).map((item) => ({ at: item.created_at, icon: "calendar-check", title: `${item.displayName || "이용자"} · ${item.targetName || "거래"}`, detail: `${money(item.total_amount)} · ${operationStatusLabelForBusiness(item.status, isMarket)}` })),
@@ -363,11 +394,13 @@
     ].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 6);
     $("#ownerRecentActivity").innerHTML = activities.length ? activities.map((item) => `<div><i data-lucide="${item.icon}"></i><span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.detail)}</small></span><time>${date(item.at)}</time></div>`).join("") : empty("아직 표시할 운영 활동이 없습니다.");
     window.lucide?.createIcons();
+    window.motfApplyWorkspacePermissions?.();
   }
 
   window.motfRefreshPartnerOperations = async function refreshPartnerOperations(force = false) {
+    const version = workspaceVersion;
     const business = window.motfCurrentBusiness;
-    if (!client() || !business || window.motfCurrentProfile?.role !== "partner") return;
+    if (!client() || !business || !window.motfPortalActive) return;
     if (loadingPromise) return loadingPromise;
     if (!force && Date.now() - lastLoadedAt < 30000) return renderOperations();
     loadingPromise = Promise.all([
@@ -377,14 +410,16 @@
       window.motfLoadPartnerReviews(true),
       window.motfLoadPartnerSettlements(true),
     ]).then(() => {
+      if (version !== workspaceVersion) return;
       lastLoadedAt = Date.now();
       applyStarPensionOperationsOverlay();
       renderOperations();
     }).catch((error) => {
+      if (version !== workspaceVersion) return;
       console.error("Partner operations failed", error);
       const target = $("#ownerOperationsTasks");
       if (target) target.innerHTML = empty(error.message || "운영 현황을 불러오지 못했습니다.");
-    }).finally(() => { loadingPromise = null; });
+    }).finally(() => { if (version === workspaceVersion) loadingPromise = null; });
     return loadingPromise;
   };
 
@@ -409,4 +444,6 @@
       .on("postgres_changes", { event: "*", schema: "public", table: "partner_settlements" }, scheduleRealtimeRefresh)
       .subscribe();
   }, 0);
+  window.motfOwnerRuntimeReady = true;
+  window.dispatchEvent(new CustomEvent('motf:owner-runtime-ready'));
 })();

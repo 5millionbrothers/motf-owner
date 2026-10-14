@@ -37,7 +37,7 @@
     const notice = $("#motfListingReviewNotice");
     const submit = $("#motfSubmitListingButton");
     const save = $('#panel-mypage button[onclick="saveMypageData()"]');
-    if (!business || window.motfCurrentProfile?.role !== "partner" || !notice) return;
+    if (!business || !window.motfHasBusinessPermission?.("listing") || !notice) return;
     const offerings = window.motfReadOfferingsFromDashboard?.() || [];
     const missing = missingItems(business, offerings);
     const request = await latestOwnerRequest(business.id);
@@ -53,7 +53,7 @@
 
   window.motfSubmitInitialListing = async function submitInitialListing() {
     const business = window.motfCurrentBusiness;
-    if (!business || business.approval_status === "approved") return;
+    if (!business || !window.motfHasBusinessPermission?.("listing") || business.approval_status === "approved") return;
     const [{ data: freshBusiness, error: businessError }, { data: offerings, error: offeringError }] = await Promise.all([
       client().from("businesses").select("*").eq("id", business.id).single(),
       client().from("offerings").select("*").eq("business_id", business.id).order("sort_order"),
