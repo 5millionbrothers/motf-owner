@@ -48,6 +48,7 @@
   };
 
   window.motfLoading = {
+    isBusy: () => pending > 0,
     show: begin,
     hide: end,
     wrap(promise) {
