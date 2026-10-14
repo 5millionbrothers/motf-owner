@@ -2605,6 +2605,8 @@
   let chatReloadTimer = 0;
   let partnerPresenceTimer = 0;
   let partnerPresenceConversationId = "";
+  let partnerChatLoadVersion = 0;
+  let pendingChatLink = new URLSearchParams(window.location.search).get("conversationId") || "";
 
   function mapMessages(messages = [], support = false) {
     return [...messages]
@@ -2613,6 +2615,7 @@
         id: message.id,
         type: support ? (message.sender_role === "admin" ? "in" : "out") : (message.sender_role === "user" ? "in" : "out"),
         role: message.sender_role,
+        senderName: message.sender_name || "",
         text: message.body,
         createdAt: message.created_at,
       }));
@@ -2620,7 +2623,7 @@
 
   function selectedPartnerConversationId() {
     const conversationId = mockData[currentOwnerType]?.chats
-      ?.find((item) => item.user === currentSelectedChatUser)
+      ?.find((item) => (item.conversationId || item.user) === currentSelectedChatUser || item.user === currentSelectedChatUser)
       ?.conversationId || "";
     return String(conversationId).startsWith(STAR_DEMO_PREFIX) ? "" : conversationId;
   }
@@ -2683,22 +2686,24 @@
   window.motfSyncPartnerChatPresence = syncPartnerConversation;
 
   window.loadMotfPartnerChats = async function loadMotfPartnerChats(business = window.motfCurrentBusiness) {
+    const version = ++partnerChatLoadVersion;
     if (!client() || !business) return;
     const selectedConversationId = selectedPartnerConversationId();
     const { data: supportConversationId, error: supportStartError } = await client().rpc("start_support_conversation");
     if (supportStartError) console.warn("Could not prepare support conversation.", supportStartError);
     const businessQuery = client().from("conversations")
-      .select("id, customer_name, group_name, last_message_at, messages(id, sender_role, body, created_at)")
+      .select("id, organization_id, customer_name, group_name, last_message_at, messages(id, sender_name, sender_role, body, created_at)")
       .eq("business_id", business.id)
       .order("last_message_at", { ascending: false });
     const supportQuery = supportConversationId
-      ? client().from("conversations").select("id, customer_name, group_name, last_message_at, messages(id, sender_role, body, created_at)").eq("id", supportConversationId).limit(1)
+      ? client().from("conversations").select("id, organization_id, customer_name, group_name, last_message_at, messages(id, sender_name, sender_role, body, created_at)").eq("id", supportConversationId).limit(1)
       : Promise.resolve({ data: [], error: null });
     const [businessResult, supportResult] = await Promise.all([businessQuery, supportQuery]);
+    if (version !== partnerChatLoadVersion) return;
     if (businessResult.error || supportResult.error) return console.error(businessResult.error || supportResult.error);
     const businessChats = (businessResult.data || []).map((conversation) => {
       const messages = mapMessages(conversation.messages);
-      const userLabel = conversation.group_name
+      const userLabel = conversation.organization_id ? `단체 · ${conversation.group_name || "단체 문의"}` : conversation.group_name
         ? `${conversation.customer_name} (${conversation.group_name})`
         : conversation.customer_name;
       return {
@@ -2727,9 +2732,10 @@
       ...businessChats.filter((item) => !String(item.conversationId || "").startsWith(STAR_DEMO_PREFIX)),
     ];
     mockData[currentOwnerType].chats = chats;
-    currentSelectedChatUser = chats.find((item) => item.conversationId === selectedConversationId)?.user
-      || chats[0]?.user
-      || "";
+    const selectedChat = chats.find((item) => item.conversationId === pendingChatLink)
+      || chats.find((item) => item.conversationId === selectedConversationId) || chats[0];
+    if (selectedChat?.conversationId === pendingChatLink) pendingChatLink = "";
+    currentSelectedChatUser = selectedChat?.conversationId || selectedChat?.user || "";
     window.renderChatList?.();
     window.renderChatMessages?.();
     await syncPartnerConversation({ markRead: true });
@@ -2740,7 +2746,7 @@
     const input = document.getElementById("chatMessageInput");
     const text = input?.value.trim();
     if (!text) return;
-    const chat = mockData[currentOwnerType].chats.find((item) => item.user === currentSelectedChatUser);
+    const chat = mockData[currentOwnerType].chats.find((item) => (item.conversationId || item.user) === currentSelectedChatUser || item.user === currentSelectedChatUser);
     if (String(chat?.conversationId || "").startsWith(STAR_DEMO_PREFIX)) return originalSendChatMessage?.();
     if (!chat?.conversationId) return originalSendChatMessage?.();
     input.disabled = true;
@@ -2756,9 +2762,23 @@
     }
     input.value = "";
     await window.loadMotfPartnerChats();
-    currentSelectedChatUser = chat.user;
+    currentSelectedChatUser = chat.conversationId || chat.user;
     window.renderChatList?.();
     window.renderChatMessages?.();
+  };
+
+  window.motfOpenPartnerTransactionChat = async function (transactionId) {
+    const demo = mockData[currentOwnerType]?.orders?.find((order) => String(order.id) === String(transactionId));
+    if (!client() || !window.motfCurrentBusiness || isDemoTransactionId(transactionId)) return window.goToUserChat?.(demo?.user || "");
+    const savedTransaction = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(String(transactionId));
+    const { data, error } = await client().rpc(savedTransaction ? "start_partner_transaction_conversation" : "start_partner_pending_conversation", savedTransaction ? {
+      target_kind: currentOwnerType === "market" ? "market" : "stay", target_transaction_id: transactionId,
+    } : { target_order_id: String(transactionId) });
+    if (error) return alert(error.message || "거래 채팅을 열지 못했습니다.");
+    window.switchPanel?.("chat");
+    pendingChatLink = data;
+    await window.loadMotfPartnerChats();
+    document.querySelector('.chat-layout')?.classList.add('is-room-open');
   };
 
   window.loadMotfAdminChats = async function loadMotfAdminChats() {
@@ -2766,7 +2786,7 @@
     const [businessResult, conversationResult] = await Promise.all([
       client().from("businesses").select("id, business_name, business_type, representative_name").order("business_name"),
       client().from("conversations")
-        .select("id, business_id, customer_name, group_name, last_message_at, messages(id, sender_role, body, created_at)")
+        .select("id, business_id, organization_id, customer_name, group_name, last_message_at, messages(id, sender_name, sender_role, body, created_at)")
         .order("last_message_at", { ascending: false }),
     ]);
     if (businessResult.error || conversationResult.error) return console.error(businessResult.error || conversationResult.error);
@@ -2775,6 +2795,12 @@
       ...conversation,
       messages: mapMessages(conversation.messages),
     }));
+    const linkedChat = adminChatConversations.find((chat) => chat.id === pendingChatLink);
+    if (linkedChat) {
+      masterSelectedChatPartner = linkedChat.business_id;
+      masterSelectedChatUser = linkedChat.id;
+      pendingChatLink = "";
+    }
     if (!adminChatBusinesses.some((item) => item.id === masterSelectedChatPartner)) {
       masterSelectedChatPartner = adminChatBusinesses.find((item) => adminChatConversations.some((chat) => chat.business_id === item.id))?.id
         || adminChatBusinesses[0]?.id
@@ -2838,7 +2864,7 @@
     userList.innerHTML = "";
     conversations.forEach((conversation) => {
       const preview = conversation.messages.at(-1)?.text || "새 대화";
-      const userLabel = conversation.group_name ? `${conversation.customer_name} (${conversation.group_name})` : conversation.customer_name;
+      const userLabel = conversation.organization_id ? `단체 · ${conversation.group_name || "단체 문의"}` : conversation.group_name ? `${conversation.customer_name} (${conversation.group_name})` : conversation.customer_name;
       const button = document.createElement("button");
       button.className = `master-list-item ${masterSelectedChatUser === conversation.id ? "active" : ""}`;
       button.innerHTML = `<strong>${escapeHtml(userLabel)}</strong><small>${escapeHtml(preview)}</small>`;
@@ -2857,7 +2883,7 @@
     }
     messageArea.innerHTML = conversation.messages.map((message) => {
       const incoming = message.role === "user";
-      const sender = incoming ? conversation.customer_name : message.role === "admin" ? "모티프 운영팀" : `${business?.business_name || "업장"} 사장님`;
+      const sender = message.senderName || (incoming ? conversation.customer_name : message.role === "admin" ? "모티프 운영팀" : `${business?.business_name || "업장"} 사장님`);
       return `<div style="align-self:${incoming ? "flex-start" : "flex-end"};max-width:72%;"><div class="admin-chat-meta">${escapeHtml(sender)}</div><div class="chat-bubble ${incoming ? "received" : "sent"}" style="max-width:100%;">${escapeHtml(message.text)}</div></div>`;
     }).join("");
     messageArea.scrollTop = messageArea.scrollHeight;

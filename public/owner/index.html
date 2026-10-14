@@ -2197,7 +2197,7 @@
       renderSeasonCalendar();
 
       if(data.chats.length > 0) {
-        currentSelectedChatUser = data.chats[0].user;
+        currentSelectedChatUser = data.chats[0].conversationId || data.chats[0].user;
       }
 
       updatePreviewDisplay();
@@ -2800,7 +2800,7 @@
         <div style="margin-bottom:8px;"><strong>🎯 ${isMarket ? '주문 상품' : '매칭 항목'}:</strong> ${order.target}</div>
         <div style="margin-bottom:12px; font-weight:700; color:var(--teal-dark); font-size:15px;"><strong>💵 총 금액:</strong> ${order.price.toLocaleString()}원</div>
         <div style="margin-bottom:12px;"><strong>🚦 상태:</strong> <span style="font-weight:700;">${isConfirmed ? (isMarket ? '주문 확정' : '확정 완료') : '확정 대기중'}</span></div>
-        <button class="primary-btn" style="width:100%; justify-content:center; font-size:12px; padding:6px;" onclick="goToUserChat('${order.user}')">
+        <button class="primary-btn" style="width:100%; justify-content:center; font-size:12px; padding:6px;" onclick="motfOpenPartnerTransactionChat('${order.id}')">
           <i data-lucide="message-square" style="width:14px;"></i> 이 고객과 채팅 소통하기
         </button>
       `;
@@ -2852,7 +2852,7 @@
         } else {
           actionsHtml = `
             <div class="item-actions">
-              <button class="mypage-btn" onclick="goToUserChat('${o.user}')"><i data-lucide="message-square" style="width:14px;"></i> 소통하기</button>
+              <button class="mypage-btn" onclick="motfOpenPartnerTransactionChat('${o.id}')"><i data-lucide="message-square" style="width:14px;"></i> 소통하기</button>
             </div>
           `;
         }
@@ -2917,9 +2917,9 @@
       
       data.chats.forEach(c => {
         const li = document.createElement('li');
-        li.className = `chat-user-item ${c.user === currentSelectedChatUser ? 'active' : ''}`;
+        li.className = `chat-user-item ${(c.conversationId || c.user) === currentSelectedChatUser || c.user === currentSelectedChatUser ? 'active' : ''}`;
         li.onclick = () => {
-          currentSelectedChatUser = c.user;
+          currentSelectedChatUser = c.conversationId || c.user;
           document.querySelector('.chat-layout')?.classList.add('is-room-open');
           renderChatList();
           renderChatMessages();
@@ -2934,10 +2934,10 @@
 
         li.innerHTML = `
           <div class="chat-user-top">
-            <span class="chat-user-name">${c.user}</span>
-            <span class="chat-user-status ${badgeClass}">${c.status}</span>
+            <span class="chat-user-name">${chatSafeText(c.user)}</span>
+            <span class="chat-user-status ${badgeClass}">${chatSafeText(c.status)}</span>
           </div>
-          <div class="chat-user-preview">${c.preview}</div>
+          <div class="chat-user-preview">${chatSafeText(c.preview)}</div>
         `;
         container.appendChild(li);
       });
@@ -2961,11 +2961,17 @@
     }
     window.motfBackToChatList = motfBackToChatList;
 
+    function chatSafeText(value) {
+      const node = document.createElement('span');
+      node.textContent = String(value || '');
+      return node.innerHTML;
+    }
+
     function renderChatMessages() {
       const container = document.getElementById('chatBodyContainer');
       container.innerHTML = '';
       const data = mockData[currentOwnerType];
-      const chat = data.chats.find(c => c.user === currentSelectedChatUser);
+      const chat = data.chats.find(c => (c.conversationId || c.user) === currentSelectedChatUser || c.user === currentSelectedChatUser);
       
       if(!chat) return;
       const mobileTitle = document.getElementById('chatMobileRoomTitle');
@@ -2974,7 +2980,13 @@
       chat.messages.forEach(m => {
         const bubble = document.createElement('div');
         bubble.className = `chat-bubble ${m.type === 'in' ? 'received' : 'sent'}`;
-        bubble.innerText = m.text;
+        if (m.senderName || m.createdAt) {
+          const meta = document.createElement('small');
+          meta.style.cssText = 'display:block;font-size:11px;opacity:.7;margin-bottom:4px;';
+          meta.textContent = [m.senderName, m.createdAt ? new Date(m.createdAt).toLocaleString('ko-KR', {timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}) : ''].filter(Boolean).join(' · ');
+          bubble.appendChild(meta);
+        }
+        bubble.appendChild(document.createTextNode(m.text));
         container.appendChild(bubble);
       });
       container.scrollTop = container.scrollHeight;
@@ -2986,7 +2998,7 @@
       if(!text) return;
 
       const data = mockData[currentOwnerType];
-      const chat = data.chats.find(c => c.user === currentSelectedChatUser);
+      const chat = data.chats.find(c => (c.conversationId || c.user) === currentSelectedChatUser || c.user === currentSelectedChatUser);
       if(chat) {
         chat.messages.push({ type: 'out', text: text });
         chat.preview = text;
@@ -3189,11 +3201,12 @@
       let confirmationResendAvailableAt = 0;
       function requestedPanelFromUrl(role = 'partner') {
         const params = new URLSearchParams(window.location.search);
-        const raw = String(params.get('open') || params.get('panel') || '').trim();
+        const raw = String(params.get('open') || params.get('panel') || params.get('section') || '').trim();
         if (!raw) return '';
-        const normalized = raw.replace(/^panel-/, '').replace(/^master-/, '');
+        let normalized = raw.replace(/^panel-/, '').replace(/^master-/, '');
         if (role === 'admin') {
-          const adminPanels = new Set(['stats', 'partners', 'chats', 'cases', 'orders', 'content', 'revenue', 'settlement', 'discovery', 'commerce', 'customer-care', 'stay-import']);
+          if (normalized === 'chat' || normalized === 'chats') normalized = 'chat-monitor';
+          const adminPanels = new Set(['stats', 'partners', 'chat-monitor', 'cases', 'orders', 'content', 'revenue', 'settlement', 'discovery', 'commerce', 'customer-care', 'stay-import']);
           return adminPanels.has(normalized) ? `master-${normalized}` : '';
         }
         const partnerPanels = new Set(['operations', 'calendar', 'orders', 'availability', 'chat', 'reviews', 'revenue', 'settlements', 'mypage']);
@@ -3589,7 +3602,7 @@
       }, 0);
     })();
   </script>
-  <script src="/owner/owner-data.js?v=20260911-v2"></script>
+  <script src="/owner/owner-data.js?v=20261014-org3"></script>
   <script src="/owner/owner-identity.js?v=20260829-ownerops1"></script>
   <script src="/owner/admin-control.js?v=20260908-merged-admin4"></script>
   <script src="/owner/stay-import.js?v=20260907-review1"></script>
