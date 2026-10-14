@@ -724,8 +724,8 @@
 
       <form id="loginForm" onsubmit="handleLogin(event)">
         <div class="form-group">
-          <label for="ownerId" style="display:block; text-align:left; margin-bottom:6px; font-size:13px; font-weight:600;">이메일 또는 데모 아이디</label>
-          <input type="text" id="ownerId" placeholder="이메일을 입력하세요" required autocomplete="username">
+          <label for="ownerId" style="display:block; text-align:left; margin-bottom:6px; font-size:13px; font-weight:600;">아이디 또는 기존 가입 이메일</label>
+          <input type="text" id="ownerId" placeholder="아이디 또는 기존 가입 이메일" required autocomplete="username">
         </div>
         <div class="form-group">
           <label for="ownerPw" style="display:block; text-align:left; margin-bottom:6px; font-size:13px; font-weight:600;">비밀번호</label>
@@ -742,8 +742,8 @@
       <button class="kakao-login-btn" onclick="handleKakaoLogin()">카카오로 시작하기</button>
       <button class="signup-link-btn" onclick="openSignupModal()">회원가입</button>
       <button class="confirmation-resend-btn" type="button" onclick="openOwnerPasswordReset()">비밀번호 찾기</button>
-      <button id="confirmationResendButton" class="confirmation-resend-btn" type="button" onclick="handleConfirmationResend()">인증 메일 다시 받기</button>
-      <p class="login-help">인증 메일이 보이지 않으면 스팸 메일함을 확인하거나 위 버튼으로 다시 받아주세요.</p>
+      <button hidden id="confirmationResendButton" class="confirmation-resend-btn" type="button" onclick="handleConfirmationResend()">인증 메일 다시 받기</button>
+      <p class="login-help">기존 계정은 가입 이메일로도 로그인할 수 있습니다.</p>
     </div>
   </section>
 
@@ -759,7 +759,8 @@
         <div class="form-group"><label for="signupOwnerName" style="display:block;margin-bottom:6px;font-size:13px;font-weight:600;">대표자명</label><input id="signupOwnerName" type="text" readonly required placeholder="본인인증 후 자동 입력"></div>
         <div class="form-group"><label for="signupPhone" style="display:block;margin-bottom:6px;font-size:13px;font-weight:600;">휴대전화번호</label><input id="signupPhone" type="tel" readonly required placeholder="본인인증 후 자동 입력"></div>
         <div class="form-group"><label for="signupBirthDate" style="display:block;margin-bottom:6px;font-size:13px;font-weight:600;">생년월일</label><input id="signupBirthDate" readonly required placeholder="본인인증 후 자동 입력"></div>
-        <div class="form-group"><label for="signupId" style="display:block;margin-bottom:6px;font-size:13px;font-weight:600;">로그인 이메일</label><input id="signupId" type="email" placeholder="example@motf.co.kr" required autocomplete="email"></div>
+        <div class="form-group"><label for="signupId" style="display:block;margin-bottom:6px;font-size:13px;font-weight:600;">로그인 아이디</label><input id="signupId" type="text" pattern="[a-zA-Z][a-zA-Z0-9_]{3,23}" minlength="4" maxlength="24" placeholder="영문·숫자·밑줄 4~24자리" required autocomplete="username"></div>
+        <div class="form-group"><label for="signupEmail">연락 이메일 (선택)</label><input id="signupEmail" type="email" autocomplete="email" placeholder="example@email.com"></div>
         <div class="form-group"><label for="signupPassword" style="display:block;margin-bottom:6px;font-size:13px;font-weight:600;">비밀번호</label><input id="signupPassword" type="password" minlength="8" maxlength="12" placeholder="영문·숫자·특수문자 8~12자리" required autocomplete="new-password"></div>
         <div class="form-group"><label for="signupPasswordConfirm" style="display:block;margin-bottom:6px;font-size:13px;font-weight:600;">비밀번호 확인</label><input id="signupPasswordConfirm" type="password" minlength="8" maxlength="12" required autocomplete="new-password"></div>
         <label class="terms-row"><input id="signupTerms" type="checkbox" required><span class="terms-content"><span>이용약관 및 개인정보 수집·이용에 동의합니다.</span><button type="button" class="terms-view-btn" onclick="openTermsGuide(event)">약관 확인하기</button></span></label>
@@ -772,8 +773,8 @@
     <div class="auth-modal-card">
       <div class="auth-modal-head"><h2 id="ownerPasswordResetTitle">비밀번호 재설정</h2><button class="modal-close-btn" type="button" onclick="closeOwnerPasswordReset()" aria-label="닫기">×</button></div>
       <form id="ownerPasswordResetForm" onsubmit="submitOwnerPasswordReset(event)">
-        <p class="login-help" style="text-align:left;">가입 이메일과 휴대폰 본인인증 정보가 일치하면 새 비밀번호를 설정할 수 있습니다.</p>
-        <div class="form-group"><label for="ownerResetEmail">가입 이메일</label><input id="ownerResetEmail" type="email" required autocomplete="email"></div>
+        <p class="login-help" style="text-align:left;">가입 아이디 또는 기존 가입 이메일과 본인확인 정보로 비밀번호를 재설정합니다.</p>
+        <div class="form-group"><label for="ownerResetEmail">가입 아이디</label><input id="ownerResetEmail" type="text" required autocomplete="username" placeholder="아이디 또는 기존 가입 이메일"></div>
         <button type="button" class="secondary-btn" style="width:100%;justify-content:center;" onclick="startOwnerIdentity('password_reset')">휴대폰 본인인증</button>
         <div id="ownerPasswordIdentityResult" class="owner-identity-result" hidden></div>
         <div class="form-group"><label for="ownerResetPassword">새 비밀번호</label><input id="ownerResetPassword" type="password" minlength="8" maxlength="12" required placeholder="영문·숫자·특수문자 8~12자리"></div>
@@ -989,8 +990,9 @@
 
         <h3>사장님 계정 및 정산 정보</h3>
         <div class="motf-business-fields" id="motfOwnerAccountFields" style="margin-bottom:18px;">
-          <label>로그인 이메일
-            <input id="motfOwnerEmail" readonly placeholder="로그인 계정 이메일" />
+          <label>로그인 아이디<input id="motfOwnerUsername" minlength="4" maxlength="24" autocomplete="username" placeholder="영문·숫자·밑줄 4~24자리" /><button type="button" class="secondary-btn" id="ownerUsernameSave" onclick="saveOwnerUsername()">아이디 등록</button></label>
+          <label>연락 이메일
+            <input id="motfOwnerEmail" readonly placeholder="연락 이메일" />
           </label>
           <label>사장님 연락처
             <input id="motfOwnerPhone" maxlength="30" autocomplete="tel" placeholder="010-0000-0000" />
@@ -3388,12 +3390,12 @@
       async function openDashboardForUser(user) {
         const { data: profile, error: profileError } = await supabaseClient
           .from('profiles')
-          .select('email, full_name, phone, organization, role, status')
+          .select('email, username, full_name, phone, organization, role, status')
           .eq('id', user.id)
           .single();
 
         if (profileError || !profile) throw new Error('회원 정보를 불러오지 못했습니다.');
-        if (profile.status !== 'approved') {
+        if (profile.status !== 'approved' && !(profile.role === 'partner' && profile.status === 'pending')) {
           const { data: importedDraft } = profile.role === 'partner' && profile.status === 'pending'
             ? await supabaseClient.from('businesses').select('id').eq('owner_id', user.id).not('import_job_id', 'is', null).maybeSingle()
             : { data: null };
@@ -3477,7 +3479,13 @@
         if (submitButton) { submitButton.disabled = true; submitButton.textContent = '로그인 중...'; }
 
         try {
-          const { data, error } = await supabaseClient.auth.signInWithPassword({ email: inputId, password });
+          const response = await fetch('https://motf.co.kr/api/account-login', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifier: inputId, password })
+          });
+          const result = await response.json();
+          if (!response.ok || !result.ok) throw new Error(result.message || '로그인하지 못했습니다.');
+          const { data, error } = await supabaseClient.auth.setSession(result.session);
           if (error) throw error;
           await openDashboardForUser(data.user);
         } catch (error) {
@@ -3492,7 +3500,7 @@
           if (code === 'email_not_confirmed' || message.includes('email not confirmed')) {
             alert('이메일 인증이 완료되지 않았습니다. 가입한 메일함의 인증 링크를 먼저 눌러주세요. 스팸 메일함도 확인해 주세요.');
           } else if (code === 'invalid_credentials' || message.includes('invalid login credentials')) {
-            alert('이메일 또는 비밀번호가 일치하지 않습니다.');
+            alert('아이디 또는 비밀번호가 일치하지 않습니다.');
           } else {
             alert(error.message || '로그인에 실패했습니다.');
           }

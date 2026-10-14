@@ -929,6 +929,7 @@
     const marketPolicyFields = document.getElementById("motfMarketOrderPolicyFields");
     if (marketPolicyFields) marketPolicyFields.hidden = business.business_type !== "market";
     const values = {
+      motfOwnerUsername: profile.username || "",
       motfOwnerEmail: profile.email || "",
       motfOwnerPhone: profile.phone || business.phone || "",
       motfSettlementBank: settlement.bank_name || "",
@@ -940,9 +941,13 @@
       motfMarketCloseTimeSaturday: marketPolicy.closeTimeSaturday,
       motfMarketApprovalMinutes: String(marketPolicy.approvalMinutes),
     };
+    const usernameInput = document.getElementById("motfOwnerUsername");
+    if (usernameInput) usernameInput.readOnly = Boolean(profile.username);
+    const usernameButton = document.getElementById("ownerUsernameSave");
+    if (usernameButton) usernameButton.hidden = Boolean(profile.username);
     Object.entries(values).forEach(([id, value]) => {
       const input = document.getElementById(id);
-      if (input && (id.startsWith("motfMarket") || !input.value)) input.value = value || "";
+      if (input && (id === "motfOwnerUsername" || id.startsWith("motfMarket") || !input.value)) input.value = value || "";
     });
   }
 
@@ -1624,7 +1629,7 @@
     const body = document.getElementById("masterUserControlTableBody");
     if (!body) return;
     const query = document.getElementById("masterUserSearch")?.value.trim().toLowerCase() || "";
-    const users = profiles.filter((profile) => profile.role === "user" && [profile.full_name, profile.email, profile.phone, profile.organization]
+    const users = profiles.filter((profile) => profile.role === "user" && [profile.full_name, profile.username, profile.email, profile.phone, profile.organization]
       .some((value) => String(value || "").toLowerCase().includes(query)));
     if (!users.length) {
       body.innerHTML = '<tr class="motf-admin-empty-row"><td colspan="5">가입한 이용자가 없습니다.</td></tr>';
@@ -1632,7 +1637,7 @@
     }
     body.innerHTML = users.map((profile) => `
       <tr>
-        <td><strong>${escapeHtml(profile.full_name || "이름 미등록")}</strong>${profile.is_test_account ? ' <span class="master-status-badge master-badge-waiting">내부 테스트</span>' : ""}<br><small>${escapeHtml(profile.email || "")}</small></td>
+        <td><strong>${escapeHtml(profile.full_name || "이름 미등록")}</strong>${profile.is_test_account ? ' <span class="master-status-badge master-badge-waiting">내부 테스트</span>' : ""}<br><small>${escapeHtml(profile.username || profile.email || "카카오 계정")}</small></td>
         <td>${escapeHtml(profile.phone || "미등록")}</td>
         <td>${escapeHtml(profile.organization || "미등록")}</td>
         <td>${statusBadge(profile.status)}</td>
@@ -1648,7 +1653,7 @@
     const partners = profiles.filter((profile) => {
       if (profile.role !== "partner") return false;
       const business = businesses.find((item) => item.owner_id === profile.id);
-      return [profile.full_name, profile.email, profile.phone, business?.business_name, business?.business_number]
+      return [profile.full_name, profile.username, profile.email, profile.phone, business?.business_name, business?.business_number]
         .some((value) => String(value || "").toLowerCase().includes(query));
     });
     if (!partners.length) {
@@ -1664,7 +1669,7 @@
         : '<small class="motf-map-state is-missing">지도 위치 미등록</small>';
       return `
         <tr>
-          <td><strong>${escapeHtml(business?.business_name || "업장정보 미등록")}</strong><br><small>${escapeHtml(profile.email || "")}</small>${locationState}</td>
+          <td><strong>${escapeHtml(business?.business_name || "업장정보 미등록")}</strong><br><small>${escapeHtml(profile.username || profile.email || "")}</small>${locationState}</td>
           <td>${escapeHtml(type)} · ${statusBadge(profile.status)}</td>
           <td>${escapeHtml(business?.business_number || "사업자번호 미등록")}</td>
           <td><span style="font-weight:700; color:var(--teal-dark);">${businessOfferings.length}개 상품</span></td>
@@ -1691,7 +1696,7 @@
 
     const [profileResult, businessResult, offeringResult] = await Promise.all([
       client().from("profiles")
-        .select("id, email, full_name, phone, organization, role, status, is_test_account, created_at")
+        .select("id, email, username, full_name, phone, organization, role, status, is_test_account, created_at")
         .order("created_at", { ascending: false }),
       client().from("businesses")
         .select(businessSelect)

@@ -14,8 +14,8 @@
     return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
   }
 
-  async function api(path, body) {
-    const response = await fetch(`${API_BASE}${path}`, { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify(body) });
+  async function api(path, body, token = "") {
+    const response = await fetch(`${API_BASE}${path}`, { method:"POST", headers:{ "Content-Type":"application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body:JSON.stringify(body) });
     const result = await response.json().catch(() => null);
     if (!response.ok || !result?.ok) throw new Error(result?.message || "요청을 처리하지 못했습니다.");
     return result;
@@ -25,7 +25,7 @@
     const email = purpose === "password_reset"
       ? document.getElementById("ownerResetEmail").value.trim()
       : document.getElementById("signupId").value.trim();
-    if (purpose === "password_reset" && !email) throw new Error("가입 이메일을 먼저 입력해주세요.");
+    if (purpose === "password_reset" && !email) throw new Error("가입 아이디 또는 기존 가입 이메일을 먼저 입력해주세요.");
     const popup = window.open("", "motf_identity", "width=430,height=640,toolbar=no,menubar=no,scrollbars=yes,resizable=yes");
     if (!popup) throw new Error("팝업을 허용해주세요.");
     popup.document.write("<!doctype html><html lang='ko'><meta charset='utf-8'><title>본인인증 연결 중</title><body style='font-family:sans-serif;padding:32px;text-align:center'>본인인증 화면을 연결하고 있습니다.</body></html>");
@@ -76,18 +76,35 @@
     if(password!==document.getElementById("signupPasswordConfirm").value) return alert("비밀번호 확인이 일치하지 않습니다.");
     const button=event.submitter; button.disabled=true; button.textContent="가입 처리 중...";
     try {
-      const email=document.getElementById("signupId").value.trim();
+      const username=document.getElementById("signupId").value.trim().toLowerCase();
+      const email=document.getElementById("signupEmail").value.trim();
       await api("/api/identity-signup",{
-        accountType:"partner", identityToken:signupIdentity.token, email, password,
+        accountType:"partner", identityToken:signupIdentity.token, username, email, password,
+        termsAccepted:document.getElementById("signupTerms").checked,
         businessType:document.getElementById("signupRole").value,
         businessName:document.getElementById("signupBusinessName").value.trim(),
         emailRedirectTo:`${location.origin}/`,
       });
-      document.getElementById("ownerId").value=email;
+      document.getElementById("ownerId").value=username;
       closeSignupModal(); document.getElementById("signupForm").reset(); signupIdentity=null;
-      alert("인증 메일을 보냈습니다. 이메일 인증 후 로그인해주세요.");
+      alert("가입이 완료되었습니다. 아이디로 로그인해주세요.");
     } catch(error) { alert(error.message||"회원가입에 실패했습니다."); }
     finally { button.disabled=false; button.textContent="가입 완료"; }
+  };
+
+  window.saveOwnerUsername = async function() {
+    const button = document.getElementById("ownerUsernameSave");
+    button.disabled = true;
+    try {
+      const { data } = await window.motfSupabase.auth.getSession();
+      const result = await api("/api/account-username", { username:document.getElementById("motfOwnerUsername").value }, data.session?.access_token);
+      window.motfCurrentProfile.username = result.username;
+      document.getElementById("motfOwnerUsername").value = result.username;
+      document.getElementById("motfOwnerUsername").readOnly = true;
+      button.hidden = true;
+      alert("로그인 아이디가 등록되었습니다.");
+    } catch(error) { alert(error.message); }
+    finally { button.disabled = false; }
   };
 
   window.openOwnerPasswordReset = function(){ document.getElementById("ownerPasswordResetModal").classList.add("active"); document.getElementById("ownerResetEmail").value=document.getElementById("ownerId").value.trim(); };
@@ -99,7 +116,7 @@
     if(!passwordIsValid(password)) return alert("비밀번호는 영문·숫자·특수문자를 포함한 8~12자리여야 합니다.");
     if(password!==document.getElementById("ownerResetPasswordConfirm").value) return alert("비밀번호 확인이 일치하지 않습니다.");
     try {
-      await api("/api/identity-password-reset",{ email:document.getElementById("ownerResetEmail").value.trim(),password,identityToken:resetIdentity.token });
+      await api("/api/identity-password-reset",{ identifier:document.getElementById("ownerResetEmail").value.trim(),password,identityToken:resetIdentity.token });
       closeOwnerPasswordReset(); event.target.reset(); resetIdentity=null; alert("비밀번호가 변경되었습니다.");
     } catch(error){ alert(error.message||"비밀번호를 변경하지 못했습니다."); }
   };
