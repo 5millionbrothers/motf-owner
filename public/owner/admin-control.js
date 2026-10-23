@@ -110,7 +110,7 @@
     $("#adminPopupFormV2")?.addEventListener("submit", savePopupV2);
     $("#adminCommunityFormV2")?.addEventListener("submit", saveCommunityV2);
     $("#adminRecreationFormV2")?.addEventListener("submit", saveRecreationV2);
-    $("#adminDiscoverySearch")?.addEventListener("input", loadDiscoveryV2);
+    $("#adminDiscoverySearch")?.addEventListener("input", () => { if (window.innerWidth < 1024) loadDiscoveryV2(); });
     document.addEventListener("click", handleAdminV2Click);
   }
 

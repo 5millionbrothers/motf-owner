@@ -1643,7 +1643,7 @@
         <td>${escapeHtml(profile.phone || "미등록")}</td>
         <td>${escapeHtml(profile.organization || "미등록")}</td>
         <td>${statusBadge(profile.status)}</td>
-        <td>${userAction(profile)}</td>
+        <td>${userAction(profile)}${window.innerWidth >= 1024 ? `<button type="button" class="secondary-btn motf-admin-mini-btn" data-member-detail="${profile.id}">세부 내역</button>` : ''}</td>
       </tr>
     `).join("");
   }
@@ -2080,6 +2080,7 @@
     if (scope === "partner" && window.motfCurrentBusiness?.business_type === "market") {
       const products = await loadMarketInventoryData(businessId);
       box.innerHTML = marketInventoryBoxHtml(products);
+      window.motfPcMarketInventoryMounted?.(box,products);
       window.motfApplyAvailabilityCalendarData?.({ offerings: [], blocks: [] });
       window.lucide?.createIcons();
       return;
