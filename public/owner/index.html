@@ -1317,9 +1317,9 @@
         <form id="masterPaymentRecoveryForm" class="motf-payment-recovery" onsubmit="motfReconcilePayment(event)">
           <div>
             <strong>결제·예약 복구</strong>
-            <span>토스 결제는 성공했지만 예약이나 주문이 생성되지 않은 경우에만 사용하세요.</span>
+            <span>결제·예약 누락 또는 처리 중인 전액 환불을 원결제 PG에서 확인합니다. 재결제·재환불은 실행하지 않습니다.</span>
           </div>
-          <input name="orderId" autocomplete="off" placeholder="토스 주문번호 예: TS-20260831-..." required>
+          <input name="orderId" autocomplete="off" placeholder="모티프 결제 주문번호" required>
           <button class="primary-btn" type="submit">결제 조회 후 복구</button>
         </form>
         <div class="admin-filter-row">
@@ -3628,7 +3628,7 @@
     })();
   </script>
   <link rel="stylesheet" href="/owner/pc-1023.css?v=20261023-v1">
-  <script src="/owner/owner-data.js?v=20261023-v1"></script>
+  <script src="/owner/owner-data.js?v=20261029-nicepay"></script>
   <script src="/owner/owner-identity.js?v=20261014-workspace80"></script>
   <script src="/owner/admin-control.js?v=20261023-v1"></script>
   <script src="/owner/stay-import.js?v=20260907-review1"></script>

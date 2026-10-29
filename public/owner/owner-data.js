@@ -1818,6 +1818,7 @@
   };
   function transactionDisplayStatus(item) {
     if (item.refundStatus && item.refundStatus !== "none") return refundStatus[item.refundStatus] || item.refundStatus;
+    if (item.kind === "payment_intent" && ["in_progress", "expired"].includes(item.status)) return "결제 확인 필요";
     if (item.status === "virtual_account_issued") return "입금 대기";
     if (item.kind === "market" || item.sourceKind === "market") {
       return {
@@ -1849,7 +1850,7 @@
     const marketStatus = { ...transactionStatus, pending: "승인 대기", confirmed: "주문 확정", completed: "픽업 완료", rejected: "주문 거절", cancelled: "주문 취소" };
     const deadlineHtml = pending && marketLike ? marketDeadlineHtml(item.createdAt || item.created_at, window.motfCurrentBusiness) : "";
     const actions = readOnlyPaymentIntent ? `
-      <span class="master-status-badge master-badge-waiting">입금 대기</span>
+      <span class="master-status-badge master-badge-waiting">${transactionDisplayStatus(item)}</span>
     ` : pending ? `
       <div class="item-actions">
         <button class="mypage-btn" style="background:var(--olive-soft);color:var(--teal-dark);" onclick="motfProcessTransaction('${item.kind}','${item.id}','confirmed')">${admin ? "운영팀 " : ""}${marketLike ? "주문 확정" : "예약 확정"}</button>
@@ -1868,6 +1869,7 @@
           <h4>${escapeHtml(item.customerName)}</h4>
           <p>${escapeHtml(item.date)} · ${escapeHtml(item.target)} · ${Number(item.amount).toLocaleString()}원</p>
           ${deadlineHtml}
+          ${readOnlyPaymentIntent ? `<p>주문번호 ${escapeHtml(item.id)}${["in_progress", "expired"].includes(item.status) ? " · 결제 확인 전에는 예약을 확정하지 마세요. 운영팀에서 결제 복구로 확인할 수 있습니다." : ""}</p>` : ""}
           ${item.rejectReason ? `<p style="color:#b91c1c;">거절 사유: ${escapeHtml(item.rejectReason)}</p>` : ""}
           ${refundLabel ? `<p style="color:#b45309;">${escapeHtml(refundLabel)}${item.refundAmount ? ` · ${Number(item.refundAmount).toLocaleString()}원` : ""}</p>` : ""}
         </div>
@@ -2247,7 +2249,7 @@
     const to = document.getElementById("ownerOrderDateTo")?.value || "";
     const rows = partnerTransactions.filter((item) => {
       const statusMatches = activeStatus === "pending"
-        ? ["pending", "virtual_account_issued"].includes(item.status)
+        ? ["pending", "virtual_account_issued", "in_progress", "expired"].includes(item.status)
         : item.status === activeStatus;
       const date = String(item.date || "").slice(0, 10);
       const searchText = [item.businessName, item.customerName, item.target, item.id].join(" ").toLowerCase();
@@ -2472,7 +2474,7 @@
     const search = document.getElementById("masterOrderSearch")?.value.trim().toLowerCase() || "";
     const statusMap = { confirm:"confirmed", past:"completed", reject:"rejected" };
     const statusFilter = statusMap[rawStatus] || rawStatus;
-    const pendingStatuses = new Set(["pending", "prepared", "virtual_account_issued", "waiting_for_deposit"]);
+    const pendingStatuses = new Set(["pending", "prepared", "virtual_account_issued", "waiting_for_deposit", "in_progress", "expired"]);
     const rows = adminTransactions.filter((item) => {
       const matchesBusiness = businessFilter === "all" || item.businessId === businessFilter;
       const matchesStatus = statusFilter === "all" || item.status === statusFilter || (statusFilter === "pending" && pendingStatuses.has(item.status));
@@ -2552,7 +2554,7 @@
       const { data: sessionData } = await client().auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) return alert("로그인이 만료되었습니다. 다시 로그인해주세요.");
-      const response = await fetch("/api/refund-transaction", {
+      let response = await fetch("/api/refund-transaction", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -2560,11 +2562,21 @@
         },
         body: JSON.stringify({ kind, id, reason, action: status === "cancelled" ? "cancel" : "reject" }),
       });
-      const result = await response.json().catch(() => null);
+      let result = await response.json().catch(() => null);
+      if (result?.code === "REFUND_ACCOUNT_REQUIRED") {
+        const bankCode = prompt("고객에게 확인한 환불 은행코드 3자리를 입력해주세요.");
+        if (bankCode == null) return;
+        const accountNumber = prompt("고객 환불 계좌번호를 입력해주세요.");
+        if (accountNumber == null) return;
+        const holderName = prompt("고객 환불계좌 예금주를 입력해주세요.");
+        if (holderName == null) return;
+        response = await fetch("/api/refund-transaction", { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ kind, id, reason, action: status === "cancelled" ? "cancel" : "reject", refundAccount: { bankCode: bankCode.trim(), accountNumber: accountNumber.replace(/\D/g, ""), holderName: holderName.trim() } }) });
+        result = await response.json().catch(() => null);
+      }
       if (window.motfCurrentProfile?.role === "admin") await window.loadMotfAdminTransactions();
       else await window.loadMotfPartnerTransactions();
       if (!response.ok || !result?.ok) {
-        return alert(result?.message || "상태는 변경됐지만 자동 환불 요청에 실패했습니다. 관리자 확인이 필요합니다.");
+        return alert(result?.message || "취소 결과를 확인하지 못했습니다. 중복 요청하지 말고 관리자에게 문의해주세요.");
       }
       alert(result.message || "상태 변경 및 자동 환불이 처리되었습니다.");
       return;
@@ -2585,8 +2597,8 @@
     if (window.motfCurrentProfile?.role !== "admin") return alert("운영자 권한이 필요합니다.");
     const form = event?.target || document.getElementById("masterPaymentRecoveryForm");
     const orderId = String(form?.orderId?.value || "").trim();
-    if (!orderId) return alert("토스 주문번호를 입력해주세요.");
-    if (!confirm(`${orderId}\n토스 결제를 조회하고 누락된 예약·주문을 복구할까요?`)) return;
+    if (!orderId) return alert("모티프 결제 주문번호를 입력해주세요.");
+    if (!confirm(`${orderId}\n원결제 상태를 조회하고 예약·주문·환불 내역을 확인할까요?`)) return;
     const button = form.querySelector('[type="submit"]');
     const original = button?.textContent;
     if (button) { button.disabled = true; button.textContent = "결제 조회 중..."; }
