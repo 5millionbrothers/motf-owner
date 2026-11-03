@@ -48,7 +48,7 @@ export default function ResetPasswordPage() {
   return (
     <main className="auth-page">
       <section className="auth-card">
-        <div className="brand-area"><div className="brand">moTF</div><p>안전한 계정 복구</p></div>
+        <div className="brand-area"><div className="brand"><img src="/owner/assets/motf-symbol.svg?v=20261103-symbol" width="152" height="111" alt="모티프" /></div><p>안전한 계정 복구</p></div>
         <div className="auth-content">
           <h1>새 비밀번호 설정</h1>
           <p className="subtitle">앞으로 사용할 새 비밀번호를 입력해 주세요.</p>

@@ -6,10 +6,10 @@ export const metadata: Metadata = {
   description: "모티프 숙소·공판장 파트너 관리 서비스",
   icons: {
     icon: [
-      { url: "/owner/assets/motf-favicon.svg", type: "image/svg+xml" },
-      { url: "/owner/assets/motf-favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/owner/assets/motf-favicon.svg?v=20261103-symbol", type: "image/svg+xml" },
+      { url: "/owner/assets/motf-favicon-32.png?v=20261103-symbol", sizes: "32x32", type: "image/png" },
     ],
-    apple: [{ url: "/owner/assets/motf-apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: "/owner/assets/motf-apple-touch-icon.png?v=20261103-symbol", sizes: "180x180", type: "image/png" }],
   },
   openGraph: {
     title: "moTF 파트너",

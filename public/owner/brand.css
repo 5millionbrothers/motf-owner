@@ -1,0 +1,15 @@
+.login-logo-wrapper .motf-symbol-logo {
+  width:76px;
+  height:auto;
+  aspect-ratio:152/111;
+}
+.sidebar-header .motf-symbol-logo {
+  width:52px!important;
+  height:auto!important;
+  aspect-ratio:152/111;
+  object-fit:contain;
+  flex-shrink:0;
+}
+@media(max-width:900px) {
+  .sidebar-header .motf-symbol-logo { width:44px!important; }
+}

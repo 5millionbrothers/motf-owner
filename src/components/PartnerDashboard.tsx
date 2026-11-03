@@ -140,7 +140,7 @@ export default function PartnerDashboard({ supabase, profileName, onLogout }: { 
 
   return <main className="dashboard-page">
     <aside className="dashboard-sidebar">
-      <div className="dashboard-sidebar-header"><div className="dashboard-logo">moTF</div><div className="dashboard-owner">{business?.business_name || profileName} 님 홈</div></div>
+      <div className="dashboard-sidebar-header"><div className="dashboard-logo"><img src="/owner/assets/motf-symbol.svg?v=20261103-symbol" width="152" height="111" alt="모티프" /></div><div className="dashboard-owner">{business?.business_name || profileName} 님 홈</div></div>
       <nav>{menuItems.map((item) => <button key={item.id} className={menu === item.id ? "active" : ""} onClick={() => setMenu(item.id)}><DashboardIcon name={item.icon}/>{item.label}{item.id === "reservations" && pendingCount > 0 && <b>{pendingCount}</b>}</button>)}</nav>
     </aside>
     <section className="dashboard-content">
