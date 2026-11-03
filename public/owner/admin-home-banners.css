@@ -1,0 +1,7 @@
+.admin-banner-fixed { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:15px 18px; margin:18px 0; border:1px solid #dce5d3; border-radius:6px; background:#f5f8f0; color:#465739; }
+.admin-banner-fixed span { font-size:12px; color:#77836b; }
+.admin-home-banner-row>img { width:120px; height:64px; object-fit:cover; border-radius:5px; }
+.admin-home-banner-row>div { min-width:0; }.admin-home-banner-row strong { overflow-wrap:anywhere; }.admin-home-banner-row small { display:block; margin-top:6px; color:#7b8474; }
+.admin-home-banner-preview { display:flex; position:relative; isolation:isolate; color:white; min-height:150px; border-radius:7px; overflow:hidden; margin:18px 0; background:#465739; }
+.admin-home-banner-preview>img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:-2; }.admin-home-banner-preview:before { content:""; position:absolute; inset:0; background:linear-gradient(90deg,#35482fec,#35482f22); z-index:-1; }.admin-home-banner-preview>div { padding:23px; display:grid; align-content:center; gap:10px; }.admin-home-banner-preview strong { font-size:22px; }.admin-home-banner-preview span { font-size:12px; }
+@media(max-width:700px) { .admin-home-banner-row { flex-wrap:wrap; }.admin-home-banner-row>img { width:80px; height:60px; }.admin-home-banner-row .motf-admin-action-group { width:100%; }.admin-banner-fixed { display:block; }.admin-banner-fixed span { display:block; margin-top:6px; } }
