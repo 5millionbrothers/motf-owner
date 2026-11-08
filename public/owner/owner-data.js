@@ -2715,7 +2715,7 @@
     const { data: supportConversationId, error: supportStartError } = await client().rpc("start_support_conversation");
     if (supportStartError) console.warn("Could not prepare support conversation.", supportStartError);
     const businessQuery = client().from("conversations")
-      .select("id, organization_id, customer_name, group_name, last_message_at, messages(id, sender_name, sender_role, body, created_at)")
+      .select("id, organization_id, customer_name, group_name, last_message_at, conversation_contact_shares(contact_name,phone,last_shared_at), messages(id, sender_name, sender_role, body, created_at)")
       .eq("business_id", business.id)
       .order("last_message_at", { ascending: false });
     const supportQuery = supportConversationId
@@ -2732,6 +2732,7 @@
       return {
         conversationId: conversation.id,
         user: userLabel,
+        contactShares: conversation.conversation_contact_shares || [],
         status: "대화 중",
         preview: messages.at(-1)?.text || "새 대화가 시작되었습니다.",
         messages,

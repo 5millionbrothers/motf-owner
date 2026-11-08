@@ -703,7 +703,7 @@
       .motf-location-actions { align-items: flex-start; flex-direction: column; }
     }
   </style>
-  <link rel="stylesheet" href="/owner/owner-data.css?v=20260911-v2">
+  <link rel="stylesheet" href="/owner/owner-data.css?v=20261108">
   <link rel="stylesheet" href="/owner/stay-import.css?v=20260907-stayimport2">
   <link rel="stylesheet" href="/owner/stay-import-images.css?v=20260907-stayimport5">
   <link rel="stylesheet" href="/owner/listing-review.css?v=20260907-review1">
@@ -2994,6 +2994,20 @@
       const mobileTitle = document.getElementById('chatMobileRoomTitle');
       if(mobileTitle) mobileTitle.innerText = chat.user;
 
+      if (chat.contactShares?.length) {
+        const contacts = document.createElement('aside');
+        contacts.className = 'chat-shared-contacts';
+        const title = document.createElement('strong'); title.textContent = '문의자가 공유한 연락처'; contacts.append(title);
+        chat.contactShares.forEach(contact => {
+          const link = document.createElement('a');
+          link.href = 'tel:' + String(contact.phone || '').replace(/[^0-9+]/g,'');
+          link.textContent = `${contact.contact_name || '문의자'} · ${contact.phone}`;
+          contacts.append(link);
+        });
+        const note = document.createElement('small'); note.textContent = '예약·상품 상담 응대에만 사용해주세요.'; contacts.append(note);
+        container.append(contacts);
+      }
+
       chat.messages.forEach(m => {
         const bubble = document.createElement('div');
         bubble.className = `chat-bubble ${m.type === 'in' ? 'received' : 'sent'}`;
@@ -3628,12 +3642,13 @@
     })();
   </script>
   <link rel="stylesheet" href="/owner/pc-1023.css?v=20261023-v1">
-  <script src="/owner/owner-data.js?v=20261029-nicepay"></script>
+  <script src="/owner/owner-data.js?v=20261108"></script>
   <script src="/owner/owner-identity.js?v=20261014-workspace80"></script>
   <link rel="stylesheet" href="/owner/admin-home-banners.css?v=20261103">
   <script src="/owner/admin-home-banners.js?v=20261103"></script>
   <script src="/owner/admin-community-records.js?v=20261103-local2"></script>
-  <script src="/owner/admin-control.js?v=20261103-local2"></script>
+  <script src="/owner/admin-product-reviews.js?v=20261108"></script>
+  <script src="/owner/admin-control.js?v=20261108"></script>
   <script src="/owner/stay-import.js?v=20260907-review1"></script>
   <script src="/owner/listing-review.js?v=20261014-workspace80"></script>
   <script src="/owner/owner-revenue.js?v=20261014-workspace80"></script>

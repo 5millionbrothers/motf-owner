@@ -2671,3 +2671,7 @@
     flex: 1;
   }
 }
+.chat-shared-contacts { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; padding:14px; margin-bottom:16px; border:1px solid #dce4d4; border-radius:6px; background:#f7f9f4; color:#30382c; }
+.chat-shared-contacts>strong { font-size:13px; }
+.chat-shared-contacts>a { font-size:14px; color:#445b34; text-decoration:underline; }
+.chat-shared-contacts>small { width:100%; font-size:12px; color:#687260; }

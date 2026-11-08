@@ -106,6 +106,7 @@
   }
 
   function bindFormsV2() {
+    window.motfAdminProductReviews?.bind();
     window.motfAdminBanners.bind({ upload:uploadMedia, reload:loadContentV2 });
     window.motfAdminCommunityRecords.bind();
     $("#adminSocialFormV2")?.addEventListener("submit", saveSocialV2);
@@ -213,6 +214,7 @@
   }
 
   async function loadContentV2() {
+    window.motfAdminProductReviews?.load();
     window.motfAdminCommunityRecords.load();
     const [events, cards, popups, recreation, community, social] = await Promise.all([
       client().from("platform_events").select("*").order("created_at", { ascending:false }),
