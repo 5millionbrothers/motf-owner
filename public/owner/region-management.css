@@ -1,0 +1,20 @@
+.region-choice { display:inline-flex!important; align-items:center; gap:8px; margin:5px 14px 5px 0; font-size:14px; }
+.region-choice input[type=checkbox] { width:18px!important; height:18px!important; min-height:18px!important; margin:0; flex:none; }
+.owner-region-request { grid-column:1/-1; padding:18px 0; border-block:1px solid #dce4d5; margin-block:12px; }
+.owner-region-request fieldset,.signup-region-options { border:1px solid #dce4d5; padding:12px; border-radius:6px; }
+.owner-region-request p,.signup-region-options p { font-size:13px; line-height:1.7; color:#68775e; margin:8px 0; }
+.owner-region-request input[type=text],#ownerRegionReason { width:100%; margin-block:8px; }
+#panel-master-regions>section { padding-block:24px; border-top:1px solid #dce4d5; }
+.region-new-form,.region-edit-row { display:flex; align-items:end; flex-wrap:wrap; gap:12px; margin-block:12px; }
+.region-new-form label { display:grid; gap:6px; }
+.region-new-form input,.region-edit-row input { padding:10px; border:1px solid #dce4d5; border-radius:5px; }
+.region-edit-row input[type=number],.region-new-form input[type=number] { width:100px; }
+.region-business-row { display:flex; flex-wrap:wrap; align-items:center; gap:18px; padding:16px 0; border-bottom:1px solid #e1e8dc; }
+.region-business-row>div { min-width:180px; flex:1; }
+.region-business-row small { display:block; margin-top:6px; color:#6c7863; }
+.region-business-row fieldset { border:0; padding:0; flex:2; }
+.region-business-row legend { font-size:12px; color:#6c7863; }
+.region-request-row { padding:16px 0; border-bottom:1px solid #e1e8dc; }
+.region-request-row>div { display:flex; gap:8px; margin-top:10px; }
+.region-status { color:#465d36; font-size:13px; margin-top:12px; }
+#regionBusinessSearch { width:min(100%,480px); padding:12px; border:1px solid #dce4d5; border-radius:5px; margin:12px 0; }

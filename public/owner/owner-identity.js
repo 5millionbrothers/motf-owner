@@ -96,6 +96,7 @@
         emailRedirectTo:`${location.origin}/`,
       });
       document.getElementById("ownerId").value=username;
+      window.motfRememberSignupRegions?.(username);
       closeSignupModal(); document.getElementById("signupForm").reset(); signupIdentity=null;
       alert("가입이 완료되었습니다. 아이디로 로그인해주세요.");
     } catch(error) { alert(error.message||"회원가입에 실패했습니다."); }
