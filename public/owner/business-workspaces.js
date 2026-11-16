@@ -45,6 +45,7 @@
     window.motfCurrentBusiness = null;
     window.motfCurrentSettlementAccount = null;
     document.getElementById('motfWorkspaceManagement')?.remove();
+    document.getElementById('motfWorkspaceDialog')?.close();
     window.dispatchEvent(new CustomEvent('motf:owner-workspace-clear'));
     document.querySelectorAll('[data-business-workspace]').forEach((host) => {
       host.replaceChildren();
@@ -209,7 +210,7 @@
       }
       await window.motfLoadWorkspaceDashboard();
       const result = document.querySelector('#motfWorkspaceManagement [role="status"]');
-      result.textContent = data?.invite_token ? `초대 완료 · 수락 토큰: ${data.invite_token}` : '처리가 완료되었습니다.';
+      result.textContent = data?.invite_token ? '직원을 초대했습니다. 초대받은 계정의 받은 초대에서 수락할 수 있습니다.' : '처리가 완료되었습니다.';
     } catch (error) { message.textContent = error.message || '요청을 처리하지 못했습니다.'; }
     finally { busy = false; host.querySelectorAll('button').forEach((button) => { button.disabled = false; }); }
   }
@@ -217,20 +218,13 @@
     let host = document.getElementById('motfWorkspaceManagement');
     if (!host) {
       host = element('div'); host.id = 'motfWorkspaceManagement';
-      document.getElementById('panel-mypage').prepend(host);
+      window.motfWorkspaceDialogHost().append(host);
     }
     host.replaceChildren();
     host.append(element('h3', '업장 계정 관리'));
     const message = element('p'); message.setAttribute('role', 'status'); host.append(message);
     if (!selectedId) host.append(element('p', canCreate() ? '관리할 업장이 없습니다. 받은 초대를 수락하거나 업장을 추가해 주세요.' : '관리할 업장이 없습니다. 받은 직원 초대나 대표 이전 요청을 수락해 주세요.'));
-    const tokenForm = element('form');
-    const tokenLabel = element('label', '초대 토큰');
-    const token = element('input'); token.name = 'token'; token.required = true; token.autocomplete = 'off';
-    token.value = new URLSearchParams(location.search).get('invitation_token') || new URLSearchParams(location.search).get('invite_token') || '';
-    tokenLabel.append(token); tokenForm.append(tokenLabel);
-    const accept = element('button', '초대 수락'); accept.type = 'submit'; accept.className = 'secondary-btn'; tokenForm.append(accept);
-    tokenForm.addEventListener('submit', (event) => { event.preventDefault(); runAction('accept', { token: token.value.trim() }, true); });
-    host.append(tokenForm, element('h4', '받은 초대 및 대표 이전'));
+    host.append(element('h4', '받은 초대 및 대표 이전'));
     const userId = window.motfCurrentProfile.id;
     const incoming = (dashboard.invitations || []).filter((item) => item.invited_user_id === userId);
     incoming.forEach((item) => {
@@ -325,7 +319,7 @@
     if (event.detail?.panelId === 'mypage' && window.motfPortalActive) {
       window.motfLoadWorkspaceDashboard().catch((error) => {
         let host = document.getElementById('motfWorkspaceManagement');
-        if (!host) { host = element('div'); host.id = 'motfWorkspaceManagement'; document.getElementById('panel-mypage').prepend(host); }
+        if (!host) { host = element('div'); host.id = 'motfWorkspaceManagement'; window.motfWorkspaceDialogHost().append(host); }
         host.textContent = `계정 관리 정보를 불러오지 못했습니다: ${error.message}`;
       });
     }

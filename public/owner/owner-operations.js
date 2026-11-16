@@ -26,9 +26,6 @@
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   })[character]);
   const rating5 = (value) => Math.max(0, Math.min(5, Number(value || 0) / 2));
-  const isStarDemoId = (value) => String(value || "").startsWith("demo-star");
-  const isMarketDemoId = (value) => window.motfIsMarketOrderDemoId?.(value) || String(value || "").startsWith("demo-market-order");
-
   function statCard(label, value, detail, tone = "") {
     return `<article class="owner-operation-stat ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(detail)}</small></article>`;
   }
@@ -60,55 +57,10 @@
     }[status] || "상태 확인";
   }
 
-  window.motfHandleStarDemoTaskAction = async function handleStarDemoTaskAction(id, status) {
-    await window.motfProcessTransaction?.("stay", id, status);
-    await window.motfRefreshPartnerOperations?.(true);
-  };
-
   window.motfHandleOwnerUrgentAction = async function handleOwnerUrgentAction(kind, id, status) {
     await window.motfProcessTransaction?.(kind, id, status);
     await window.motfRefreshPartnerOperations?.(true);
   };
-
-  function applyStarPensionOperationsOverlay() {
-    const business = window.motfCurrentBusiness;
-    if (!window.motfIsStarPensionDemoBusiness?.(business)) return;
-    const demo = window.motfBuildStarPensionDemoData?.(business);
-    if (!demo) return;
-    transactions = [
-      ...demo.transactions.map((item) => ({
-        ...item,
-        displayName: item.customerName,
-        targetName: item.target,
-        total_amount: item.amount,
-        activityDate: item.date,
-        event_date: item.date,
-        created_at: item.status === "completed" ? `${item.date}T10:30:00+09:00` : "2026-09-08T10:30:00+09:00",
-      })),
-      ...transactions.filter((item) => !isStarDemoId(item.id)),
-    ];
-    conversations = [
-      ...demo.chats.map((item, index) => ({
-        id: item.conversationId,
-        customer_name: item.user,
-        group_name: "",
-        last_message_at: index === 0 ? new Date().toISOString() : "2026-09-07T18:20:00+09:00",
-      })),
-      ...conversations.filter((item) => !isStarDemoId(item.id)),
-    ];
-    reviews = [
-      ...(demo.reviews || []),
-      ...reviews.filter((item) => !isStarDemoId(item.id)),
-    ];
-    settlements = [
-      ...(demo.settlements || []),
-      ...settlements.filter((item) => !isStarDemoId(item.transaction_id)),
-    ];
-    if (!can("reservations")) transactions = [];
-    if (!can("chat")) conversations = [];
-    if (!can("listing")) reviews = [];
-    if (!can("settlements")) settlements = [];
-  }
 
   async function loadTransactions(business) {
     const version = workspaceVersion;
@@ -118,7 +70,7 @@
     const fields = isMarket
       ? "id,customer_name,total_amount,status,created_at,pickup_time,market_order_items(item_name,quantity)"
       : "id,customer_name,group_name,offering_name,total_amount,status,event_date,created_at";
-    const { data, error } = await client().from(table).select(fields)
+    const { data, error } = await client().from(table).select(fields).is("launch_archived_at",null)
       .eq("business_id", business.id).order("created_at", { ascending: false }).limit(300);
     if (error) throw error;
     if (version !== workspaceVersion || !can("reservations")) return;
@@ -132,27 +84,14 @@
       activityDate: isMarket ? item.created_at : item.event_date,
       createdAt: item.created_at,
     }));
-    if (isMarket) {
-      const demoRows = window.motfBuildMarketOrderDemoData?.(business) || [];
-      transactions = [
-        ...demoRows.map((item) => ({
-          ...item,
-          displayName: item.customerName,
-          targetName: item.target,
-          total_amount: item.amount,
-          activityDate: item.date,
-          created_at: item.createdAt || item.created_at,
-        })),
-        ...transactions.filter((item) => !isMarketDemoId(item.id)),
-      ];
-    }
+
   }
 
   async function loadOfferingsAndAvailability(business) {
     const version = workspaceVersion;
     if (!can("availability") && !can("listing")) { offerings = []; availabilityBlocks = []; return; }
     const offeringResult = await client().from("offerings").select("id,name,is_active")
-      .eq("business_id", business.id).order("sort_order");
+      .eq("business_id", business.id).is("retired_at", null).order("sort_order");
     if (offeringResult.error) throw offeringResult.error;
     if (version !== workspaceVersion) return;
     offerings = offeringResult.data || [];
@@ -173,9 +112,14 @@
   async function loadConversations(business) {
     const version = workspaceVersion;
     if (!can("chat")) { conversations = []; return; }
+    const relevant = await client().rpc('list_relevant_conversation_ids', {target_business_id: business.id, target_organization_id: null});
+    if (relevant.error) throw relevant.error;
+    if (version !== workspaceVersion || !can('chat')) return;
+    const ids = (relevant.data || []).map(row => row.id);
+    if (!ids.length) { conversations = []; return; }
     const { data, error } = await client().from("conversations")
       .select("id,customer_name,group_name,last_message_at")
-      .eq("business_id", business.id).order("last_message_at", { ascending: false }).limit(100);
+      .eq("business_id", business.id).in("id", ids).order("last_message_at", { ascending: false }).limit(100);
     if (error) throw error;
     if (version !== workspaceVersion || !can("chat")) return;
     conversations = data || [];
@@ -197,7 +141,6 @@
       return;
     }
     reviews = data || [];
-    applyStarPensionOperationsOverlay();
     renderReviewSummary();
     renderReviews();
   };
@@ -258,7 +201,6 @@
       return;
     }
     settlements = (data || []).filter((item) => item.business_id === window.motfCurrentBusiness.id);
-    applyStarPensionOperationsOverlay();
     renderSettlementSummary();
     renderSettlements();
   };
@@ -412,7 +354,6 @@
     ]).then(() => {
       if (version !== workspaceVersion) return;
       lastLoadedAt = Date.now();
-      applyStarPensionOperationsOverlay();
       renderOperations();
     }).catch((error) => {
       if (version !== workspaceVersion) return;
@@ -432,7 +373,12 @@
 
   function scheduleRealtimeRefresh() {
     window.clearTimeout(realtimeTimer);
-    realtimeTimer = window.setTimeout(() => window.motfRefreshPartnerOperations(true), 800);
+    realtimeTimer = window.setTimeout(() => {
+      window.motfRefreshPartnerOperations(true);
+      window.loadMotfPartnerTransactions?.();
+      if (currentActivePanel === 'chat') window.loadMotfPartnerChats?.();
+      if (currentActivePanel === 'availability') window.motfRenderAvailabilityManager?.('partner', window.motfCurrentBusiness?.id);
+    }, 800);
   }
 
   window.setTimeout(() => {
@@ -442,6 +388,9 @@
       .on("postgres_changes", { event: "*", schema: "public", table: "market_orders" }, scheduleRealtimeRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "reviews" }, scheduleRealtimeRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "partner_settlements" }, scheduleRealtimeRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "offerings" }, scheduleRealtimeRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, scheduleRealtimeRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, scheduleRealtimeRefresh)
       .subscribe();
   }, 0);
   window.motfOwnerRuntimeReady = true;

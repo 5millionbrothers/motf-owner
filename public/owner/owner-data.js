@@ -5,272 +5,20 @@
   const originalRenderMasterOrders = window.renderMasterOrders;
   const originalSendChatMessage = window.sendChatMessage;
   const originalRenderMasterCases = window.renderMasterCases;
-  const STAR_DEMO_PREFIX = "demo-star";
-  const MARKET_DEMO_PREFIX = "demo-market-order";
-  const MARKET_ORDER_DEMO_ENABLED = true;
   let adminDirectoryProfiles = [];
   let adminDirectoryBusinesses = [];
   let adminDirectoryOfferings = [];
   let directorySearchBound = false;
 
-  function isStarPensionBusiness(business = window.motfCurrentBusiness) {
-    return /별찌|byeol|star/i.test(String(business?.business_name || ""));
-  }
-
-  function starDemoOverrides() {
-    window.motfStarPensionDemoOverrides ||= {};
-    return window.motfStarPensionDemoOverrides;
-  }
-
-  function marketDemoOverrides() {
-    window.motfMarketOrderDemoOverrides ||= {};
-    return window.motfMarketOrderDemoOverrides;
-  }
-
-  function isMarketDemoId(value) {
-    return String(value || "").startsWith(MARKET_DEMO_PREFIX);
-  }
-
-  function isDemoTransactionId(value) {
-    const id = String(value || "");
-    return id.startsWith(STAR_DEMO_PREFIX) || id.startsWith(MARKET_DEMO_PREFIX);
-  }
-
-  function applyDemoOverride(item) {
-    const override = starDemoOverrides()[item.id];
-    return override ? { ...item, ...override } : item;
-  }
-
-  function applyMarketDemoOverride(item) {
-    const override = marketDemoOverrides()[item.id];
-    return override ? { ...item, ...override } : item;
-  }
-
-  function dateKey(date) {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  }
-
-  function timeKey(date) {
-    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-  }
-
-  function marketDemoLateCreatedAt(business = window.motfCurrentBusiness) {
-    const policy = readMarketPolicyFromBusiness(business);
-    const now = new Date();
-    const openDeadlineToday = setDateMinutes(now, minutesFromTime(policy.openTime) + policy.approvalMinutes);
-    const base = new Date(now);
-    if (now < openDeadlineToday) base.setDate(base.getDate() - 1);
-    const closeMinutes = marketCloseMinutesForDate(base, policy);
-    const lateMinutes = Math.max(minutesFromTime(policy.openTime), closeMinutes - Math.min(30, Math.floor(policy.approvalMinutes / 2)));
-    return setDateMinutes(base, lateMinutes);
-  }
-
-  function buildMarketOrderDemoData(business = window.motfCurrentBusiness) {
-    if (!MARKET_ORDER_DEMO_ENABLED || business?.business_type !== "market") return [];
-    const businessName = business?.business_name || "공판장";
-    const now = new Date();
-    const recentCreatedAt = new Date(now.getTime() - 15 * 60 * 1000);
-    const lateCreatedAt = marketDemoLateCreatedAt(business);
-    const confirmedCreatedAt = new Date(now.getTime() - 2 * 60 * 60 * 1000);
-    const rows = [
-      {
-        kind: "market",
-        id: `${MARKET_DEMO_PREFIX}-pending-normal`,
-        businessId: business?.id || "market-demo-business",
-        businessName,
-        customerName: "[데모] 한양대 축구부",
-        date: `${dateKey(recentCreatedAt)} ${timeKey(recentCreatedAt)}`,
-        target: "돼지고기 목살 8kg, 생수 24개, 쌈채소 5팩",
-        amount: 248000,
-        status: "pending",
-        rejectReason: "",
-        refundStatus: "none",
-        refundAmount: null,
-        createdAt: recentCreatedAt.toISOString(),
-        created_at: recentCreatedAt.toISOString(),
-      },
-      {
-        kind: "market",
-        id: `${MARKET_DEMO_PREFIX}-pending-late`,
-        businessId: business?.id || "market-demo-business",
-        businessName,
-        customerName: "[데모] 마감 이후 접수 테스트",
-        date: `${dateKey(lateCreatedAt)} ${timeKey(lateCreatedAt)}`,
-        target: "소주 2박스, 맥주 3박스, 안주류",
-        amount: 186000,
-        status: "pending",
-        rejectReason: "",
-        refundStatus: "none",
-        refundAmount: null,
-        createdAt: lateCreatedAt.toISOString(),
-        created_at: lateCreatedAt.toISOString(),
-      },
-      {
-        kind: "market",
-        id: `${MARKET_DEMO_PREFIX}-confirmed`,
-        businessId: business?.id || "market-demo-business",
-        businessName,
-        customerName: "[데모] 중앙대 새내기 MT",
-        date: `${dateKey(confirmedCreatedAt)} ${timeKey(confirmedCreatedAt)}`,
-        target: "삼겹살 10kg, 라면 2박스, 종이컵 2줄",
-        amount: 315000,
-        status: "confirmed",
-        rejectReason: "",
-        refundStatus: "none",
-        refundAmount: null,
-        createdAt: confirmedCreatedAt.toISOString(),
-        created_at: confirmedCreatedAt.toISOString(),
-      },
-    ].map(applyMarketDemoOverride);
-    return rows;
-  }
-
-  function applyMarketOrderDemoOverlay(business = window.motfCurrentBusiness) {
-    if (!MARKET_ORDER_DEMO_ENABLED || business?.business_type !== "market") return;
-    partnerTransactions = [
-      ...buildMarketOrderDemoData(business),
-      ...partnerTransactions.filter((item) => !isMarketDemoId(item.id)),
-    ];
-  }
-
-  function buildStarPensionDemoData(business = window.motfCurrentBusiness) {
-    const businessName = business?.business_name || "별찌펜션";
-    const transactions = [
-      {
-        kind: "stay",
-        id: `${STAR_DEMO_PREFIX}-reservation-001`,
-        businessName,
-        customerName: "[시연] 중앙대 경영학회",
-        date: "2026-09-20",
-        target: "별찌 단체룸 · 32명",
-        amount: 680000,
-        status: "pending",
-        rejectReason: "",
-        refundStatus: "none",
-        refundAmount: null,
-      },
-      {
-        kind: "stay",
-        id: `${STAR_DEMO_PREFIX}-reservation-002`,
-        businessName,
-        customerName: "[시연] 홍익대 밴드동아리",
-        date: "2026-09-27",
-        target: "전체 대관 · 38명",
-        amount: 980000,
-        status: "confirmed",
-        rejectReason: "",
-        refundStatus: "none",
-        refundAmount: null,
-      },
-      {
-        kind: "stay",
-        id: `${STAR_DEMO_PREFIX}-reservation-003`,
-        businessName,
-        customerName: "[시연] 국민대 사진동아리",
-        date: "2026-08-24",
-        target: "별관 단체룸 · 18명",
-        amount: 420000,
-        status: "completed",
-        rejectReason: "",
-        refundStatus: "none",
-        refundAmount: null,
-      },
-      {
-        kind: "stay",
-        id: `${STAR_DEMO_PREFIX}-reservation-004`,
-        businessName,
-        customerName: "[시연] 한양대 축구동아리",
-        date: "2026-09-14",
-        target: "별찌 단체룸 · 45명",
-        amount: 760000,
-        status: "rejected",
-        rejectReason: "최대 수용 인원 초과로 예약 진행이 어렵습니다.",
-        refundStatus: "none",
-        refundAmount: null,
-      },
-    ].map(applyDemoOverride);
-    const chats = [
-      {
-        conversationId: `${STAR_DEMO_PREFIX}-chat-001`,
-        user: "[시연] 중앙대 경영학회",
-        status: "예약 문의",
-        preview: "바비큐장은 몇 시부터 사용할 수 있나요?",
-        messages: [
-          { type: "in", text: "안녕하세요. 바비큐장은 몇 시부터 사용할 수 있나요?" },
-          { type: "out", text: "안녕하세요. 오후 6시부터 사용 가능하고, 숯·그릴은 현장에서 준비해드립니다." },
-          { type: "in", text: "32명 기준이면 테이블은 충분할까요?" },
-        ],
-      },
-      {
-        conversationId: `${STAR_DEMO_PREFIX}-chat-002`,
-        user: "[시연] 홍익대 밴드동아리",
-        status: "예약 확정",
-        preview: "노래방 마이크 2개 맞을까요?",
-        messages: [
-          { type: "in", text: "노래방 마이크 2개 맞을까요? 공연 연습도 조금 하려고 합니다." },
-          { type: "out", text: "네, 무선 마이크 2개 준비되어 있고 23시 전까지 이용 가능합니다." },
-        ],
-      },
-    ];
-    const reviews = [
-      { id: `${STAR_DEMO_PREFIX}-review-001`, author_name: "[시연] 홍익대 밴드동아리", rating: 10, body: "단체 인원이 많았는데 공간이 넓고 바비큐 동선이 편했습니다.", tags: ["단체 MT", "바비큐", "공간 넓음"], image_urls: [], is_hidden: false, created_at: "2026-09-04T12:20:00+09:00" },
-      { id: `${STAR_DEMO_PREFIX}-review-002`, author_name: "[시연] 국민대 사진동아리", rating: 8, body: "대성리역에서 가까워 이동이 편했고 문의 답변도 빨랐습니다.", tags: ["역 근처", "친절한 응대"], image_urls: [], is_hidden: false, created_at: "2026-08-25T09:30:00+09:00" },
-      { id: `${STAR_DEMO_PREFIX}-review-003`, author_name: "[시연] 한양대 축구동아리", rating: 6, body: "시설은 좋았지만 최대 인원 기준은 조금 더 명확히 안내되면 좋겠습니다.", tags: ["인원 안내 필요"], image_urls: [], is_hidden: false, created_at: "2026-08-16T16:10:00+09:00" },
-    ];
-    const settlements = transactions.map((item, index) => {
-      const gross = Number(item.amount || 0);
-      const commissionRate = 0.1;
-      const commission = Math.round(gross * commissionRate);
-      return {
-        transaction_id: `${STAR_DEMO_PREFIX}-settlement-${String(index + 1).padStart(3, "0")}`,
-        business_id: business?.id || "star-demo-business",
-        customer_name: item.customerName,
-        target_name: item.target,
-        transaction_date: item.date,
-        created_at: item.status === "completed" ? `${item.date}T10:30:00+09:00` : "2026-09-08T10:30:00+09:00",
-        gross_amount: gross,
-        customer_paid_amount: gross,
-        platform_discount_amount: 0,
-        commission_rate: commissionRate,
-        commission_amount: commission,
-        payout_amount: gross - commission,
-        status: item.status === "completed" ? "paid" : "pending",
-        paid_at: item.status === "completed" ? item.date : null,
-      };
-    });
-    return { transactions, chats, reviews, settlements };
-  }
-
-  function demoStatusToLegacy(status) {
-    return ({ confirmed: "confirm", completed: "past", rejected: "reject", cancelled: "reject" })[status] || "pending";
-  }
-
   function syncPartnerTransactionsToMock() {
-    mockData[currentOwnerType].orders = partnerTransactions.map((item) => ({
-      id: item.id,
-      user: item.customerName,
-      date: String(item.date || "").slice(0, 10),
-      target: item.target,
-      price: Number(item.amount || 0),
-      status: isDemoTransactionId(item.id) ? demoStatusToLegacy(item.status) : item.status,
-      rejectReason: item.rejectReason || "",
-      refundStatus: item.refundStatus || "none",
+    mockData[currentOwnerType].orders = partnerTransactions.map(item => ({
+      id: item.id, user: item.customerName, contactPhone: item.contactPhone,
+      date: String(item.date || '').slice(0,10), target: item.target,
+      price: Number(item.amount || 0), status: item.status,
+      rejectReason: item.rejectReason || '', refundStatus: item.refundStatus || 'none',
       refundAmount: item.refundAmount || null,
     }));
   }
-
-  function applyStarPensionTransactionOverlay(business = window.motfCurrentBusiness) {
-    if (!isStarPensionBusiness(business)) return;
-    partnerTransactions = [
-      ...buildStarPensionDemoData(business).transactions,
-      ...partnerTransactions.filter((item) => !String(item.id || "").startsWith(STAR_DEMO_PREFIX)),
-    ];
-  }
-
-  window.motfIsStarPensionDemoBusiness = isStarPensionBusiness;
-  window.motfBuildStarPensionDemoData = buildStarPensionDemoData;
-  window.motfIsMarketOrderDemoId = isMarketDemoId;
-  window.motfBuildMarketOrderDemoData = buildMarketOrderDemoData;
 
   const businessSelect = [
     "id",
@@ -1373,14 +1121,14 @@
       let offeringQuery = client().from("offerings")
         .select("id, name, description, price, max_people, min_people, base_people, extra_person_fee, unit, category, image_url, image_urls, sort_order, feature_summary, amenity_details, detail_sections, origin, nutrition_info, is_alcohol, stock_quantity, is_active, offseason_weekday_price, offseason_weekend_price, shoulder_weekday_price, shoulder_weekend_price, peak_weekday_price, peak_weekend_price, bathroom_count, bathroom_gender_separated, bathroom_note")
         .eq("business_id", business.id);
-      if (business.approval_status === "approved") offeringQuery = offeringQuery.eq("is_active", true);
+      offeringQuery = offeringQuery.is("retired_at", null);
       let result = await offeringQuery.order("sort_order");
 
       // Keep the operating portal usable while optional detail columns are being migrated.
       if (result.error) {
         result = await client().from("offerings")
-          .select("id, name, description, price, max_people, min_people, unit, category, image_url, sort_order")
-          .eq("business_id", business.id)
+          .select("id, name, description, price, max_people, min_people, unit, category, image_url, sort_order, is_active")
+          .eq("business_id", business.id).is("retired_at", null)
           .order("sort_order");
       }
 
@@ -1704,7 +1452,7 @@
         .select(businessSelect)
         .order("created_at", { ascending: false }),
       client().from("offerings")
-        .select("id, business_id, is_active"),
+        .select("id, business_id, is_active").is("retired_at", null),
     ]);
 
     if (profileResult.error || businessResult.error || offeringResult.error) {
@@ -1868,6 +1616,8 @@
           <div style="font-size:12px;color:var(--teal);font-weight:700;margin-bottom:5px;">${escapeHtml(item.businessName)}</div>
           <h4>${escapeHtml(item.customerName)}</h4>
           <p>${escapeHtml(item.date)} · ${escapeHtml(item.target)} · ${Number(item.amount).toLocaleString()}원</p>
+          ${item.contactPhone ? `<p><a href="tel:${escapeHtml(String(item.contactPhone).replace(/[^0-9+]/g,''))}">전화 문의 ${escapeHtml(item.contactPhone)}</a></p>` : ''}
+          ${!admin && window.motfHasBusinessPermission?.('chat') ? `<button type="button" class="secondary-btn" onclick="motfOpenPartnerTransactionChat('${escapeHtml(item.id)}')">문의자와 채팅</button>` : ''}
           ${deadlineHtml}
           ${readOnlyPaymentIntent ? `<p>주문번호 ${escapeHtml(item.id)}${["in_progress", "expired"].includes(item.status) ? " · 결제 확인 전에는 예약을 확정하지 마세요. 운영팀에서 결제 복구로 확인할 수 있습니다." : ""}</p>` : ""}
           ${item.rejectReason ? `<p style="color:#b91c1c;">거절 사유: ${escapeHtml(item.rejectReason)}</p>` : ""}
@@ -1904,6 +1654,7 @@
     return {
       kind: "payment_intent",
       sourceKind: item.kind,
+      contactPhone: draft.contact_phone || "",
       id: item.order_id,
       businessId: pendingIntentBusinessId(item),
       businessName,
@@ -2007,7 +1758,7 @@
     const { data, error } = await client()
       .from("offerings")
       .select("id, business_id, name, description, price, unit, category, stock_quantity, is_active, image_url, businesses(id, business_name, business_type)")
-      .eq("business_id", businessId)
+      .eq("business_id", businessId).is("retired_at", null)
       .order("sort_order");
     if (error) {
       console.warn("Could not load market inventory data.", error);
@@ -2017,8 +1768,8 @@
   }
 
   function marketInventoryBoxHtml(products) {
-    const categories = ["식재료", "주류/음료", "일회용품", "냉동식품", "기타"];
-    const categoryLabel = (value) => categories.includes(value) ? value : "기타";
+    const categories = [...new Set([...window.motfMarketCategories, ...products.map(item => item.category).filter(Boolean)])];
+    const categoryLabel = (value) => value || "기타";
     const stockCardHtml = (item) => {
       const active = item.is_active !== false;
       const stockText = item.stock_quantity == null ? "재고 수량 미입력" : `${Number(item.stock_quantity).toLocaleString()}개`;
@@ -2081,6 +1832,7 @@
     }
     if (scope === "partner" && window.motfCurrentBusiness?.business_type === "market") {
       const products = await loadMarketInventoryData(businessId);
+      if (window.motfCurrentBusiness?.id !== businessId || !window.motfHasBusinessPermission?.("availability")) return;
       box.innerHTML = marketInventoryBoxHtml(products);
       window.motfPcMarketInventoryMounted?.(box,products);
       window.motfApplyAvailabilityCalendarData?.({ offerings: [], blocks: [] });
@@ -2088,6 +1840,7 @@
       return;
     }
     const { offerings, blocks } = await loadStayAvailabilityData(businessId);
+    if (scope === "partner" && (window.motfCurrentBusiness?.id !== businessId || !window.motfHasBusinessPermission?.("availability"))) return;
     box.innerHTML = availabilityBoxHtml(scope, offerings, blocks);
     if (scope === "partner") window.motfApplyAvailabilityCalendarData?.({ offerings, blocks });
   }
@@ -2175,9 +1928,9 @@
     await syncCommissionSettings();
     const table = business.business_type === "market" ? "market_orders" : "reservations";
     const fields = business.business_type === "market"
-      ? "id, customer_name, pickup_time, total_amount, status, reject_reason, refund_status, refund_amount, created_at, market_order_items(item_name, quantity)"
-      : "id, customer_name, group_name, event_date, offering_name, total_amount, status, reject_reason, refund_status, refund_amount";
-    const { data, error } = await client().from(table).select(fields).eq("business_id", business.id).order("created_at", { ascending: false });
+      ? "id, customer_name, contact_phone, pickup_time, total_amount, status, reject_reason, refund_status, refund_amount, created_at, market_order_items(item_name, quantity)"
+      : "id, customer_name, contact_phone, group_name, event_date, offering_name, total_amount, status, reject_reason, refund_status, refund_amount, created_at";
+    const { data, error } = await client().from(table).select(fields).is("launch_archived_at",null).eq("business_id", business.id).order("created_at", { ascending: false });
     if (window.motfCurrentBusiness?.id !== business.id || !window.motfHasBusinessPermission("reservations")) return;
     if (error) return console.error(error);
     await client().rpc("release_expired_checkout_intents");
@@ -2195,6 +1948,8 @@
       kind: business.business_type === "market" ? "market" : "stay",
       id: item.id,
       businessName: business.business_name,
+      businessId: business.id,
+      contactPhone: item.contact_phone || "",
       customerName: item.group_name ? `${item.customer_name} (${item.group_name})` : item.customer_name,
       createdAt: item.created_at,
       created_at: item.created_at,
@@ -2211,10 +1966,8 @@
       refundAmount: item.refund_amount,
       })),
     ];
-    applyStarPensionTransactionOverlay(business);
-    applyMarketOrderDemoOverlay(business);
     syncPartnerTransactionsToMock();
-    const active = partnerTransactions.filter((item) => !isDemoTransactionId(item.id) && !["rejected", "cancelled"].includes(item.status));
+    const active = partnerTransactions.filter((item) => !["rejected", "cancelled"].includes(item.status));
     const rawTotal = active.reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const settled = active.filter((item) => item.status === "completed").reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const expected = active.filter((item) => ["pending", "confirmed"].includes(item.status)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -2294,8 +2047,8 @@
     await syncCommissionSettings();
     const [businessResult, reservationResult, orderResult, intentResult] = await Promise.all([
       client().from("businesses").select("id, business_name, business_type"),
-      client().from("reservations").select("id, business_id, customer_name, group_name, event_date, offering_name, total_amount, status, reject_reason, refund_status, refund_amount, created_at").order("created_at", { ascending: false }),
-      client().from("market_orders").select("id, business_id, customer_name, pickup_time, total_amount, status, reject_reason, refund_status, refund_amount, created_at, market_order_items(item_name, quantity)").order("created_at", { ascending: false }),
+      client().from("reservations").select("id, business_id, customer_name, group_name, event_date, offering_name, total_amount, status, reject_reason, refund_status, refund_amount, created_at").is("launch_archived_at",null).order("created_at", { ascending: false }),
+      client().from("market_orders").select("id, business_id, customer_name, pickup_time, total_amount, status, reject_reason, refund_status, refund_amount, created_at, market_order_items(item_name, quantity)").is("launch_archived_at",null).order("created_at", { ascending: false }),
       client().rpc("list_pending_payment_intents", { target_business_id: null }),
     ]);
     if (businessResult.error || reservationResult.error || orderResult.error || intentResult.error) return console.error(businessResult.error || reservationResult.error || orderResult.error || intentResult.error);
@@ -2487,58 +2240,6 @@
 
   window.motfProcessTransaction = async function motfProcessTransaction(kind, id, status) {
     if (window.motfCurrentProfile?.role !== "admin" && !window.motfHasBusinessPermission?.("reservations")) return;
-    if (isMarketDemoId(id)) {
-      let reason = null;
-      if (["rejected", "cancelled"].includes(status)) {
-        reason = prompt(status === "cancelled" ? "취소 사유를 입력해주세요." : "거절 사유를 입력해주세요.")?.trim();
-        if (!reason) return;
-      }
-      const confirmMessage = status === "confirmed"
-        ? "이 데모 주문을 확정할까요?"
-        : status === "cancelled"
-          ? "이 데모 주문을 취소할까요?"
-          : "이 데모 주문을 거절할까요?";
-      if (!confirm(confirmMessage)) return;
-      marketDemoOverrides()[id] = {
-        status,
-        rejectReason: reason || "",
-        refundStatus: "none",
-        refundAmount: null,
-      };
-      applyMarketOrderDemoOverlay(window.motfCurrentBusiness);
-      syncPartnerTransactionsToMock();
-      window.renderOrders?.();
-      window.renderCalendar?.();
-      window.motfRefreshPartnerOperations?.(true);
-      alert("데모 주문 상태가 변경되었습니다.");
-      return;
-    }
-    if (String(id || "").startsWith(STAR_DEMO_PREFIX)) {
-      let reason = null;
-      if (["rejected", "cancelled"].includes(status)) {
-        reason = prompt(status === "cancelled" ? "취소 사유를 입력해주세요." : "거절 사유를 입력해주세요.")?.trim();
-        if (!reason) return;
-      }
-      const confirmMessage = status === "confirmed"
-        ? "이 시연 예약을 확정할까요?"
-        : status === "cancelled"
-          ? "이 시연 예약을 취소할까요?"
-          : "이 시연 예약을 거절할까요?";
-      if (!confirm(confirmMessage)) return;
-      starDemoOverrides()[id] = {
-        status,
-        rejectReason: reason || "",
-        refundStatus: "none",
-        refundAmount: null,
-      };
-      applyStarPensionTransactionOverlay(window.motfCurrentBusiness);
-      syncPartnerTransactionsToMock();
-      window.renderOrders?.();
-      window.renderCalendar?.();
-      window.motfRefreshPartnerOperations?.(true);
-      alert("시연 예약 상태가 변경되었습니다.");
-      return;
-    }
     let reason = null;
     if (["rejected", "cancelled"].includes(status)) {
       reason = prompt(status === "cancelled" ? "운영팀 취소 사유를 입력해주세요." : "거절 사유를 입력해주세요.")?.trim();
@@ -2648,7 +2349,7 @@
     const conversationId = mockData[currentOwnerType]?.chats
       ?.find((item) => (item.conversationId || item.user) === currentSelectedChatUser || item.user === currentSelectedChatUser)
       ?.conversationId || "";
-    return String(conversationId).startsWith(STAR_DEMO_PREFIX) ? "" : conversationId;
+    return conversationId;
   }
 
   function isPartnerChatVisible() {
@@ -2714,10 +2415,14 @@
     const selectedConversationId = selectedPartnerConversationId();
     const { data: supportConversationId, error: supportStartError } = await client().rpc("start_support_conversation");
     if (supportStartError) console.warn("Could not prepare support conversation.", supportStartError);
-    const businessQuery = client().from("conversations")
+    const relevant = await client().rpc('list_relevant_conversation_ids', {target_business_id: business.id, target_organization_id: null});
+    if (version !== partnerChatLoadVersion || window.motfCurrentBusiness?.id !== business.id) return;
+    if (relevant.error) { mockData[currentOwnerType].chats = []; window.renderChatList?.(); return console.error(relevant.error); }
+    const relevantIds = (relevant.data || []).map(row => row.id);
+    const businessQuery = relevantIds.length ? client().from("conversations")
       .select("id, organization_id, customer_name, group_name, last_message_at, conversation_contact_shares(contact_name,phone,last_shared_at), messages(id, sender_name, sender_role, body, created_at)")
-      .eq("business_id", business.id)
-      .order("last_message_at", { ascending: false });
+      .eq("business_id", business.id).in("id", relevantIds)
+      .order("last_message_at", { ascending: false }) : Promise.resolve({data: [], error: null});
     const supportQuery = supportConversationId
       ? client().from("conversations").select("id, organization_id, customer_name, group_name, last_message_at, messages(id, sender_name, sender_role, body, created_at)").eq("id", supportConversationId).limit(1)
       : Promise.resolve({ data: [], error: null });
@@ -2749,12 +2454,7 @@
         isSupport: true,
       };
     });
-    const demoChats = isStarPensionBusiness(business) ? buildStarPensionDemoData(business).chats : [];
-    const chats = [
-      ...supportChats,
-      ...demoChats,
-      ...businessChats.filter((item) => !String(item.conversationId || "").startsWith(STAR_DEMO_PREFIX)),
-    ];
+    const chats = [...supportChats, ...businessChats];
     mockData[currentOwnerType].chats = chats;
     const selectedChat = chats.find((item) => item.conversationId === pendingChatLink)
       || chats.find((item) => item.conversationId === selectedConversationId) || chats[0];
@@ -2772,8 +2472,7 @@
     const text = input?.value.trim();
     if (!text) return;
     const chat = mockData[currentOwnerType].chats.find((item) => (item.conversationId || item.user) === currentSelectedChatUser || item.user === currentSelectedChatUser);
-    if (String(chat?.conversationId || "").startsWith(STAR_DEMO_PREFIX)) return originalSendChatMessage?.();
-    if (!chat?.conversationId) return originalSendChatMessage?.();
+    if (!chat?.conversationId) return alert("대화를 먼저 선택해주세요.");
     input.disabled = true;
     const { error } = await client().rpc("send_chat_message", {
       target_conversation_id: chat.conversationId,
@@ -2794,8 +2493,7 @@
 
   window.motfOpenPartnerTransactionChat = async function (transactionId) {
     if (!window.motfHasBusinessPermission?.("chat")) return;
-    const demo = mockData[currentOwnerType]?.orders?.find((order) => String(order.id) === String(transactionId));
-    if (!client() || !window.motfCurrentBusiness || isDemoTransactionId(transactionId)) return window.goToUserChat?.(demo?.user || "");
+    if (!client() || !window.motfCurrentBusiness) return;
     const savedTransaction = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(String(transactionId));
     const { data, error } = await client().rpc(savedTransaction ? "start_partner_transaction_conversation" : "start_partner_pending_conversation", savedTransaction ? {
       target_kind: currentOwnerType === "market" ? "market" : "stay", target_transaction_id: transactionId,
@@ -2812,7 +2510,7 @@
     const [businessResult, conversationResult] = await Promise.all([
       client().from("businesses").select("id, business_name, business_type, representative_name").order("business_name"),
       client().from("conversations")
-        .select("id, business_id, organization_id, customer_name, group_name, last_message_at, messages(id, sender_name, sender_role, body, created_at)")
+        .select("id, business_id, organization_id, customer_name, group_name, last_message_at, messages(id, sender_name, sender_role, body, created_at)").is("launch_archived_at",null)
         .order("last_message_at", { ascending: false }),
     ]);
     if (businessResult.error || conversationResult.error) return console.error(businessResult.error || conversationResult.error);

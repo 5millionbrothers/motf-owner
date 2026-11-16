@@ -2246,8 +2246,8 @@
       const attr = (value) => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 
       if (currentOwnerType !== 'stay') {
-        const categories = ['식재료', '주류/음료', '일회용품', '냉동식품', '기타'];
-        const categoryLabel = (value) => categories.includes(value) ? value : '기타';
+        const categories = [...new Set([...window.motfMarketCategories, ...data.rooms.map(room=>room.category).filter(Boolean)])];
+        const categoryLabel = (value) => value || '기타';
         const categoryOrder = categories.filter(category => data.rooms.some(room => categoryLabel(room.category) === category));
         const renderMarketProductCard = (room, idx) => {
           const card = document.createElement('article');
@@ -3122,7 +3122,8 @@
       document.getElementById('calcMarginResult').innerText = margin.toFixed(1) + '%';
     }
   </script>
-  <script src="/owner/business-workspaces.js?v=20261014-workspace82-draft"></script>
+  <script src="/owner/launch.js?v=20261116"></script>
+  <script src="/owner/business-workspaces.js?v=20261116-launch"></script>
   <script>
     /* Supabase 인증 연결층: 원본 화면/스타일은 변경하지 않고 로그인 함수만 교체 */
     (async () => {
@@ -3268,6 +3269,7 @@
         if (currentOwnerType === 'admin' || !Array.isArray(offerings)) return;
         mockData[currentOwnerType].rooms = offerings.map(item => ({
           id: item.id,
+          is_active: item.is_active !== false,
           name: item.name,
           price: Number(item.price) || 0,
           description: item.description || null,
@@ -3305,6 +3307,7 @@
         if (currentOwnerType === 'admin') return [];
         return mockData[currentOwnerType].rooms.map((item, index) => ({
           id: item.id || null,
+          is_active: item.is_active !== false,
           name: item.name,
           price: Number(item.price) || 0,
           description: item.description || null,
@@ -3642,7 +3645,7 @@
     })();
   </script>
   <link rel="stylesheet" href="/owner/pc-1023.css?v=20261023-v1">
-  <script src="/owner/owner-data.js?v=20261108"></script>
+  <script src="/owner/owner-data.js?v=20261116-launch"></script>
   <script src="/owner/owner-identity.js?v=20261113-regions"></script>
   <link rel="stylesheet" href="/owner/admin-home-banners.css?v=20261103">
   <script src="/owner/admin-home-banners.js?v=20261103"></script>
@@ -3650,16 +3653,17 @@
   <script src="/owner/admin-product-reviews.js?v=20261108"></script>
   <script src="/owner/admin-control.js?v=20261108"></script>
   <script src="/owner/stay-import.js?v=20260907-review1"></script>
-  <script src="/owner/listing-review.js?v=20261014-workspace80"></script>
+  <script src="/owner/listing-review.js?v=20261116-launch"></script>
   <script src="/owner/owner-revenue.js?v=20261014-workspace80"></script>
   <script src="/owner/admin-review-fixes.js?v=20260902-admin-loop1"></script>
   <script src="/owner/admin-organization-handoff.js?v=20261014-workspace80"></script>
-  <script src="/owner/owner-operations.js?v=20261014-workspace80"></script>
+  <script src="/owner/owner-operations.js?v=20261116-launch"></script>
   <script src="/owner/admin-pc-1023.js?v=20261023-v1"></script>
-  <script src="/owner/market-pc-1023.js?v=20261023-v1"></script>
+  <script src="/owner/market-pc-1023.js?v=20261116-launch"></script>
   <link rel="stylesheet" href="/owner/region-management.css?v=20261113">
   <script src="/owner/region-management.js?v=20261113"></script>
   <link rel="stylesheet" href="/owner/desktop-replies.css?v=20261116">
+  <link rel="stylesheet" href="/owner/launch.css?v=20261116">
   <script src="/owner/desktop-replies.js?v=20261116"></script>
 </body>
 </html>
