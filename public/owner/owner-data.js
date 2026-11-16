@@ -2371,6 +2371,7 @@
         senderName: message.sender_name || "",
         text: message.body,
         createdAt: message.created_at,
+        readAt: message.read_at || null,
       }));
   }
 
@@ -2422,6 +2423,11 @@
         target_conversation_id: conversationId,
       });
       if (error) console.error(error);
+      else if (isPartnerChatVisible() && selectedPartnerConversationId() === conversationId) {
+        const chat=mockData[currentOwnerType]?.chats.find(item=>item.conversationId===conversationId);
+        chat?.messages.forEach(message=>{if(message.type==='in'&&!message.readAt)message.readAt=new Date().toISOString();});
+        window.renderChatMessages?.();
+      }
     } else {
       await setPartnerPresence(conversationId, true);
     }
@@ -2449,11 +2455,11 @@
     if (relevant.error) { mockData[currentOwnerType].chats = []; window.renderChatList?.(); return console.error(relevant.error); }
     const relevantIds = (relevant.data || []).map(row => row.id);
     const businessQuery = relevantIds.length ? client().from("conversations")
-      .select("id, organization_id, customer_name, group_name, last_message_at, history_started_at, conversation_contact_shares(contact_name,phone,last_shared_at), messages(id, sender_name, sender_role, body, created_at)")
+      .select("id, organization_id, customer_name, group_name, last_message_at, history_started_at, conversation_contact_shares(contact_name,phone,last_shared_at), messages(id, sender_id, sender_name, sender_role, body, read_at, created_at)")
       .eq("business_id", business.id).in("id", relevantIds)
       .order("last_message_at", { ascending: false }) : Promise.resolve({data: [], error: null});
     const supportQuery = supportConversationId
-      ? client().from("conversations").select("id, organization_id, customer_name, group_name, last_message_at, history_started_at, messages(id, sender_name, sender_role, body, created_at)").eq("id", supportConversationId).limit(1)
+      ? client().from("conversations").select("id, organization_id, customer_name, group_name, last_message_at, history_started_at, messages(id, sender_id, sender_name, sender_role, body, read_at, created_at)").eq("id", supportConversationId).limit(1)
       : Promise.resolve({ data: [], error: null });
     const [businessResult, supportResult] = await Promise.all([businessQuery, supportQuery]);
     if (version !== partnerChatLoadVersion) return;
@@ -2539,7 +2545,7 @@
     const [businessResult, conversationResult] = await Promise.all([
       client().from("businesses").select("id, business_name, business_type, representative_name").order("business_name"),
       client().from("conversations")
-        .select("id, business_id, organization_id, customer_name, group_name, last_message_at, history_started_at, messages(id, sender_name, sender_role, body, created_at)").is("launch_archived_at",null)
+        .select("id, business_id, organization_id, customer_name, group_name, last_message_at, history_started_at, messages(id, sender_id, sender_name, sender_role, body, read_at, created_at)").is("launch_archived_at",null)
         .order("last_message_at", { ascending: false }),
     ]);
     if (businessResult.error || conversationResult.error) return console.error(businessResult.error || conversationResult.error);
@@ -2635,12 +2641,27 @@
       return;
     }
     messageArea.innerHTML = conversation.messages.map((message) => {
-      const incoming = message.role === "user";
+      const incoming = business?.business_type === 'support' ? message.role !== 'admin' : message.role === "user";
       const sender = message.senderName || (incoming ? conversation.customer_name : message.role === "admin" ? "모티프 운영팀" : `${business?.business_name || "업장"} 사장님`);
-      return `<div style="align-self:${incoming ? "flex-start" : "flex-end"};max-width:72%;"><div class="admin-chat-meta">${escapeHtml(sender)}</div><div class="chat-bubble ${incoming ? "received" : "sent"}" style="max-width:100%;">${escapeHtml(message.text)}</div></div>`;
+      return `<div class="owner-chat-message ${incoming ? 'received' : 'sent'}"><div class="admin-chat-meta">${escapeHtml(sender)}</div><div class="chat-bubble ${incoming ? 'received' : 'sent'}">${escapeHtml(message.text)}</div><time datetime="${escapeHtml(message.createdAt || '')}">${escapeHtml(chatTimestamp(message.createdAt))}</time><small class="owner-chat-read-status">${chatReadLabel(message)}</small></div>`;
     }).join("");
     messageArea.scrollTop = messageArea.scrollHeight;
+    if(business?.business_type === 'support')void markAdminSupportRead(conversation.id);
   };
+
+  const adminReadRequests=new Set();
+  async function markAdminSupportRead(conversationId){
+    if(window.motfCurrentProfile?.role!=='admin' || document.visibilityState!=='visible' || !document.getElementById('panel-master-chat-monitor')?.classList.contains('active') || adminReadRequests.has(conversationId))return;
+    const conversation=adminChatConversations.find(item=>item.id===conversationId);
+    if(!conversation?.messages.some(message=>message.role!=='admin'&&!message.readAt))return;
+    adminReadRequests.add(conversationId);
+    try{
+      const {error}=await client().rpc('mark_conversation_read',{target_conversation_id:conversationId});
+      if(error){console.error(error);return;}
+      conversation.messages.forEach(message=>{if(message.role!=='admin'&&!message.readAt)message.readAt=new Date().toISOString();});
+      if(masterSelectedChatUser===conversationId&&window.motfCurrentProfile?.role==='admin')window.renderMasterChatMonitor();
+    }catch(error){console.error(error);}finally{adminReadRequests.delete(conversationId);}
+  }
 
   window.motfSendAdminChatMessage = async function sendAdminChatMessage(event) {
     event?.preventDefault?.();
@@ -2742,6 +2763,7 @@
     void syncPartnerConversation({ markRead: true });
   });
   document.addEventListener("visibilitychange", () => {
+    if(window.motfCurrentProfile?.role==='admin'&&document.visibilityState==='visible')window.renderMasterChatMonitor?.();
     if (isPartnerChatVisible()) void syncPartnerConversation({ markRead: true });
     else stopPartnerPresence();
   });

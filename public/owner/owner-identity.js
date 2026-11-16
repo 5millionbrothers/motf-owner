@@ -2,6 +2,8 @@
   const API_BASE = "https://motf.co.kr";
   let signupIdentity = null;
   let resetIdentity = null;
+  let verificationInProgress = false;
+  let signupInProgress = false;
 
   function passwordIsValid(value) {
     return /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d\s]).{8,12}$/.test(String(value || ""));
@@ -15,10 +17,17 @@
   }
 
   async function api(path, body, token = "") {
-    const response = await fetch(`${API_BASE}${path}`, { method:"POST", headers:{ "Content-Type":"application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body:JSON.stringify(body) });
-    const result = await response.json().catch(() => null);
-    if (!response.ok || !result?.ok) throw new Error(result?.message || "요청을 처리하지 못했습니다.");
-    return result;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    try {
+      const response = await fetch(`${API_BASE}${path}`, { method:"POST", headers:{ "Content-Type":"application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body:JSON.stringify(body), signal:controller.signal });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok) throw new Error(result?.message || "요청을 처리하지 못했습니다.");
+      return result;
+    } catch (error) {
+      if (error.name === 'AbortError') throw new Error('응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.');
+      throw error;
+    } finally { clearTimeout(timeout); }
   }
 
   async function verify(purpose, accessToken = "") {
@@ -26,33 +35,40 @@
       ? document.getElementById("ownerResetEmail").value.trim()
       : document.getElementById("signupId").value.trim();
     if (purpose === "password_reset" && !email) throw new Error("가입 아이디 또는 기존 가입 이메일을 먼저 입력해주세요.");
-    const popup = window.open("", "motf_identity", "width=430,height=640,toolbar=no,menubar=no,scrollbars=yes,resizable=yes");
+    if (verificationInProgress) throw new Error('진행 중인 본인인증 창을 먼저 완료하거나 닫아주세요.');
+    const popupName = `motf_owner_identity_${crypto.randomUUID().replaceAll('-', '')}`;
+    const popup = window.open('/owner/identity-wait.html', popupName, "width=430,height=640,toolbar=no,menubar=no,scrollbars=yes,resizable=yes");
     if (!popup) throw new Error("팝업을 허용해주세요.");
-    popup.document.write("<!doctype html><html lang='ko'><meta charset='utf-8'><title>본인인증 연결 중</title><body style='font-family:sans-serif;padding:32px;text-align:center'>본인인증 화면을 연결하고 있습니다.</body></html>");
-    let start;
+    verificationInProgress = true;
+    let form;
     try {
-      start = await api("/api/identity-start", { purpose, email, accountType:"partner", returnUrl:location.href, mobile:innerWidth<720 }, accessToken);
-    } catch(error) {
-      popup.close();
-      throw error;
-    }
-    const form = document.createElement("form");
-    form.method="POST"; form.action=start.callUrl; form.target="motf_identity";
-    Object.entries(start.form || {}).forEach(([name,value]) => { const input=document.createElement("input"); input.type="hidden"; input.name=name; input.value=value; form.appendChild(input); });
-    document.body.appendChild(form); form.submit(); form.remove();
-    return new Promise((resolve,reject) => {
-      const timer=setTimeout(() => { cleanup(); reject(new Error("인증 시간이 만료되었습니다.")); },600000);
-      const listener=async(event) => {
-        if(event.origin!==API_BASE) return;
-        if(event.source!==popup) return;
-        if(event.data?.type!=="motf:kcp-identity") return;
-        cleanup();
-        if(!event.data.ok) return reject(new Error(event.data.message||"본인인증에 실패했습니다."));
-        try { resolve(await api("/api/identity-status",{ identityToken:start.identityToken,purpose }).then(result=>({token:start.identityToken,person:result.person}))); } catch(error){ reject(error); }
-      };
-      function cleanup(){ clearTimeout(timer); removeEventListener("message",listener); }
-      addEventListener("message",listener);
-    });
+      const start = await api("/api/identity-start", { purpose, email, accountType:"partner", returnUrl:location.href, mobile:innerWidth<720 }, accessToken);
+      if (!start.identityToken || !start.form?.reg_cert_key || new URL(start.callUrl).protocol !== 'https:') throw new Error('본인인증 연결 정보를 확인하지 못했습니다. 다시 시도해주세요.');
+      if (popup.closed) throw new Error('본인인증 창이 닫혔습니다. 다시 시도해주세요.');
+      form = document.createElement('form');form.method='POST';form.action=start.callUrl;form.target=popupName;
+      Object.entries(start.form).forEach(([name,value])=>{const input=document.createElement('input');input.type='hidden';input.name=name;input.value=value;form.appendChild(input);});
+      document.body.appendChild(form);
+      return await new Promise((resolve,reject)=>{
+        let finished=false,closeTimer;
+        const timer=setTimeout(()=>finish(new Error('인증 시간이 만료되었습니다. 다시 시도해주세요.')),600000);
+        function cleanup(){clearTimeout(timer);clearInterval(closeTimer);removeEventListener('message',listener);}
+        function finish(error,result){if(finished)return;finished=true;cleanup();if(error)reject(error);else resolve(result);}
+        const listener=async event=>{
+          if(event.origin!==API_BASE || event.source!==popup || event.data?.type!=='motf:kcp-identity' || finished)return;
+          // Only the server-verified status may complete signup, never popup data alone.
+          finished=true;cleanup();
+          if(event.data.ok!==true)return reject(new Error(event.data.message||'본인인증에 실패했습니다.'));
+          try{
+            const result=await api('/api/identity-status',{identityToken:start.identityToken,purpose});
+            if(!result.verified || !result.person?.name || !result.person?.phone || !result.person?.birthDate)throw new Error('인증 결과를 확인하지 못했습니다. 다시 인증해주세요.');
+            resolve({token:start.identityToken,person:result.person});
+          }catch(error){reject(error);}
+        };
+        addEventListener('message',listener);
+        closeTimer=setInterval(()=>{if(popup.closed)finish(new Error('본인인증 창이 닫혔습니다. 인증이 완료되지 않았다면 다시 시도해주세요.'));},1000);
+        try{form.submit();}catch(error){finish(error);}
+      });
+    } finally { form?.remove();popup.close();verificationInProgress=false; }
   }
 
   window.motfVerifyBusinessTransfer = async function(transferId) {
@@ -80,11 +96,14 @@
 
   window.handleSignup = async function(event) {
     event.preventDefault();
+    if(signupInProgress)return;
+    const form=document.getElementById('signupForm');
+    if(!form.reportValidity())return;
     if(!signupIdentity) return alert("휴대폰 본인인증을 먼저 완료해주세요.");
     const password=document.getElementById("signupPassword").value;
     if(!passwordIsValid(password)) return alert("비밀번호는 영문·숫자·특수문자를 포함한 8~12자리여야 합니다.");
     if(password!==document.getElementById("signupPasswordConfirm").value) return alert("비밀번호 확인이 일치하지 않습니다.");
-    const button=event.submitter; button.disabled=true; button.textContent="가입 처리 중...";
+    const button=event.submitter || form.querySelector('[type=submit]');signupInProgress=true;button.disabled=true;button.textContent="가입 처리 중...";
     try {
       const username=document.getElementById("signupId").value.trim().toLowerCase();
       const email=document.getElementById("signupEmail").value.trim();
@@ -96,11 +115,12 @@
         emailRedirectTo:`${location.origin}/`,
       });
       document.getElementById("ownerId").value=username;
-      window.motfRememberSignupRegions?.(username);
+      try { window.motfRememberSignupRegions?.(username); }
+      catch (error) { console.warn('가입 지역 선택을 임시 저장하지 못했습니다.', error); }
       closeSignupModal(); document.getElementById("signupForm").reset(); signupIdentity=null;
       alert("가입이 완료되었습니다. 아이디로 로그인해주세요.");
     } catch(error) { alert(error.message||"회원가입에 실패했습니다."); }
-    finally { button.disabled=false; button.textContent="가입 완료"; }
+    finally { signupInProgress=false;button.disabled=false;button.textContent="가입 완료"; }
   };
 
   window.saveOwnerUsername = async function() {

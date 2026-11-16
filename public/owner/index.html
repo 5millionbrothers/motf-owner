@@ -1679,7 +1679,7 @@
 
     function openTermsGuide(event) {
       event?.preventDefault?.();
-      alert('이용약관 및 개인정보처리방침 전문 페이지는 정식 약관 문서 확정 후 연결됩니다. 현재는 가입 진행을 위한 동의 항목만 표시합니다.');
+      window.motfOpenOwnerLegal?.('terms');
     }
 
     /* 모티프 본사 마스터 전용 백오피스 메뉴 및 모듈 바인딩 */
@@ -3002,6 +3002,13 @@
       return node.innerHTML;
     }
 
+    function chatTimestamp(value) {
+      const date = new Date(value);
+      return value && !Number.isNaN(date.getTime()) ? date.toLocaleString('ko-KR', {timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
+    }
+
+    function chatReadLabel(message) { return message.readAt ? '읽음' : '안읽음'; }
+
     function renderChatMessages() {
       const container = document.getElementById('chatBodyContainer');
       container.innerHTML = '';
@@ -3027,16 +3034,20 @@
       }
 
       chat.messages.forEach(m => {
+        const row = document.createElement('div');
+        row.className = `owner-chat-message ${m.type === 'in' ? 'received' : 'sent'}`;
         const bubble = document.createElement('div');
         bubble.className = `chat-bubble ${m.type === 'in' ? 'received' : 'sent'}`;
         if (m.senderName || m.createdAt) {
           const meta = document.createElement('small');
           meta.style.cssText = 'display:block;font-size:11px;opacity:.7;margin-bottom:4px;';
-          meta.textContent = [m.senderName, m.createdAt ? new Date(m.createdAt).toLocaleString('ko-KR', {timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}) : ''].filter(Boolean).join(' · ');
+          meta.textContent = [m.senderName, chatTimestamp(m.createdAt)].filter(Boolean).join(' · ');
           bubble.appendChild(meta);
         }
         bubble.appendChild(document.createTextNode(m.text));
-        container.appendChild(bubble);
+        row.appendChild(bubble);
+        if(m.id){const receipt=document.createElement('small');receipt.className='owner-chat-read-status';receipt.textContent=chatReadLabel(m);row.appendChild(receipt);}
+        container.appendChild(row);
       });
       container.scrollTop = container.scrollHeight;
     }
@@ -3145,6 +3156,10 @@
   <script>
     /* Supabase 인증 연결층: 원본 화면/스타일은 변경하지 않고 로그인 함수만 교체 */
     (async () => {
+      window.handleSignup ||= function(event) {
+        event.preventDefault();
+        alert('휴대폰 본인인증 모듈을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+      };
       const loginStatus = document.getElementById('loginRuntimeStatus');
       const loginSubmit = document.querySelector('#loginForm button[type="submit"]');
       const rememberLoginInput = document.getElementById('ownerRememberLogin');
@@ -3581,10 +3596,6 @@
         }
       };
 
-      window.handleSignup = function(event) {
-        event.preventDefault();
-        alert('휴대폰 본인인증 모듈을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
-      };
       if (loginSubmit) loginSubmit.disabled = false;
       setLoginRuntimeStatus('로그인 준비가 완료되었습니다.', 'ready');
 
@@ -3663,8 +3674,11 @@
     })();
   </script>
   <link rel="stylesheet" href="/owner/pc-1023.css?v=20261023-v1">
-  <script src="/owner/owner-data.js?v=20261116-workflow"></script>
-  <script src="/owner/owner-identity.js?v=20261113-regions"></script>
+  <script src="/owner/owner-data.js?v=20261116-signup-chat"></script>
+  <link rel="stylesheet" href="/owner/chat-meta.css?v=20261116-signup-chat">
+  <script src="/owner/owner-identity.js?v=20261116-signup-fix"></script>
+  <script src="/owner/owner-legal.js?v=20261116-signup-fix"></script>
+  <link rel="stylesheet" href="/owner/owner-legal.css?v=20261116-signup-fix">
   <link rel="stylesheet" href="/owner/admin-home-banners.css?v=20261103">
   <script src="/owner/admin-home-banners.js?v=20261103"></script>
   <script src="/owner/admin-community-records.js?v=20261103-local2"></script>
