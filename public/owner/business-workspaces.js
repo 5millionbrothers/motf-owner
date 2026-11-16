@@ -10,7 +10,8 @@
     workspaces.some((item) => item.id === selectedId && item.can_open && item.workspace_role === 'representative'));
   const panelPermissions = { calendar: 'availability', orders: 'reservations', availability: 'availability', chat: 'chat', reviews: 'listing', revenue: 'settlements', settlements: 'settlements' };
   window.motfCanOpenOwnerPanel = (panel) => panel === 'mypage' || (Boolean(selectedId) &&
-    (panel === 'operations' || window.motfHasBusinessPermission(panelPermissions[panel])));
+    (panel === 'operations' || window.motfHasBusinessPermission(panelPermissions[panel]) ||
+      (panel === 'availability' && window.motfCurrentBusiness?.business_type === 'market' && window.motfHasBusinessPermission('listing'))));
   window.motfApplyWorkspacePermissions = function applyPermissions() {
     if (!window.motfPortalActive) return;
     document.querySelectorAll('[onclick*="switchPanel("]').forEach((button) => {

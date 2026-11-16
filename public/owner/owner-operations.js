@@ -90,11 +90,11 @@
   async function loadOfferingsAndAvailability(business) {
     const version = workspaceVersion;
     if (!can("availability") && !can("listing")) { offerings = []; availabilityBlocks = []; return; }
-    const offeringResult = await client().from("offerings").select("id,name,is_active")
+    const offeringResult = await client().from("offerings").select("id,name,is_active,market_review_status")
       .eq("business_id", business.id).is("retired_at", null).order("sort_order");
     if (offeringResult.error) throw offeringResult.error;
     if (version !== workspaceVersion) return;
-    offerings = offeringResult.data || [];
+    offerings = (offeringResult.data || []).filter(item => business.business_type !== 'market' || item.market_review_status === 'approved');
     if (business.business_type !== "stay" || !can("availability")) {
       availabilityBlocks = [];
       return;

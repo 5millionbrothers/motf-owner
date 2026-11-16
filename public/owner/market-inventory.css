@@ -1,0 +1,61 @@
+#priceSettingWrapperSector[hidden],.market-workflow-badge[hidden] { display:none!important; }
+.market-workflow-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0 0 18px; }
+.market-workflow-heading h2 { margin:0; font-size:22px; }
+.market-workflow-heading p,.market-field-note { color:var(--muted); line-height:1.6; font-size:13px; }
+.market-workflow-tabs { display:flex; gap:8px; margin:16px 0 24px; }
+.market-workflow-tabs [aria-pressed=true] { background:var(--teal); color:white; }
+.market-workflow-badge { display:inline-flex; align-items:center; padding:3px 7px; border-radius:4px; font-size:12px; background:#e7eedf; color:#455b32; white-space:nowrap; }
+.market-product-dialog,.market-product-confirm { width:min(820px,calc(100vw - 40px)); max-height:calc(100dvh - 48px); padding:24px; border:1px solid var(--line); border-radius:8px; color:var(--ink); background:white; overflow:auto; }
+.market-product-confirm { width:min(440px,calc(100vw - 40px)); }
+.market-product-dialog::backdrop,.market-product-confirm::backdrop { background:#202a2655; }
+.market-product-dialog header { align-items:flex-start; }
+.market-product-dialog header p { margin:8px 0 0; }
+.market-product-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; padding:0; margin:0 0 24px; border:0; min-width:0; }
+.market-product-fields legend,.market-product-photo-section legend { font-size:15px; font-weight:650; margin:0 0 14px; }
+.market-product-fields label,.market-product-confirm label { display:grid; gap:7px; min-width:0; color:var(--ink); font-size:13px; }
+.market-product-fields input,.market-product-fields select,.market-product-fields textarea,.market-product-confirm textarea { width:100%; min-width:0; min-height:40px; padding:9px 10px; border:1px solid var(--line); border-radius:5px; color:var(--ink); background:white; font:inherit; box-sizing:border-box; }
+.market-product-fields b,.market-product-photo-section b { color:#6c8257; }
+.market-product-fields .market-check { display:flex; flex-direction:row; align-items:center; align-self:end; gap:8px; min-height:40px; }
+.market-product-fields input[type=checkbox] { width:16px!important; height:16px!important; min-height:16px; padding:0; flex:none; appearance:auto; }
+.market-field-wide { grid-column:1/-1; }
+.market-product-optional { border-block:1px solid var(--line); padding:14px 0; margin:0 0 22px; }
+.market-product-optional summary { cursor:pointer; font-size:14px; }
+.market-product-optional .market-product-fields { margin:18px 0 0; }
+.market-product-photo-section { padding:0; border:0; min-width:0; }
+.market-product-upload { display:flex; flex-wrap:wrap; align-items:center; gap:10px; border:1px dashed #aab89b; background:#f7f9f5; border-radius:6px; padding:16px; font-size:13px; }
+.market-product-upload input { max-width:100%; }
+.market-product-photos { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:12px; margin:16px 0; }
+.market-product-photos figure { min-width:0; margin:0; padding:8px; border:1px solid var(--line); border-radius:6px; cursor:grab; }
+.market-product-photos img { width:100%; aspect-ratio:1; object-fit:contain; display:block; background:#f7f8f5; }
+.market-product-photos figcaption { font-size:11px; color:var(--muted); margin:5px 0; }
+.market-product-photos figure>div { display:flex; justify-content:space-between; gap:4px; }
+.market-product-photos figure button { padding:4px; min-height:28px; }
+.market-product-photos figure svg { width:15px; height:15px; }
+.market-product-form-actions { display:flex; justify-content:flex-end; gap:8px; padding-top:14px; border-top:1px solid var(--line); }
+.market-product-error { color:#a44d32; font-size:13px; overflow-wrap:anywhere; }
+.market-save-status { padding:12px 14px; background:#eef4e9; border:1px solid #d9e4ce; border-radius:5px; font-size:13px; }
+.market-empty { color:var(--muted); font-size:14px; padding:24px 0; }
+.market-product-review-note { display:block; color:#a44d32; margin-top:5px; }
+.motf-market-stock-actions { flex-wrap:wrap; }
+.motf-market-stock-actions svg { width:15px; height:15px; }
+.market-product-review-card { border:1px solid var(--line); border-radius:6px; padding:20px; margin:0 0 16px; background:white; }
+.market-product-review-card.is-unread { border-left:3px solid #6f8556; }
+.market-product-review-card header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+.market-product-review-card h3 { font-size:17px; margin:6px 0; overflow-wrap:anywhere; }
+.market-product-review-card small,.market-product-review-card time { font-size:12px; color:var(--muted); }
+.market-product-review-card footer { display:flex; justify-content:flex-end; gap:8px; border-top:1px solid var(--line); padding-top:14px; margin-top:16px; }
+.market-product-review-card details { margin-top:16px; }
+.market-product-review-card summary { cursor:pointer; font-size:14px; }
+.market-product-review-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 20px; font-size:13px; }
+.market-product-review-fields>div { padding:9px 0; border-bottom:1px solid #e9eee4; min-width:0; }
+.market-product-review-fields dt { color:var(--muted); margin-bottom:4px; }
+.market-product-review-fields dd { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.6; }
+.market-product-review-images { display:flex; flex-wrap:wrap; gap:8px; }
+.market-product-review-images img { width:96px; height:96px; object-fit:contain; border:1px solid var(--line); border-radius:4px; }
+.market-product-before-after { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; }
+.market-product-before-after .market-product-review-fields { grid-template-columns:minmax(0,1fr); }
+@media(max-width:700px) {
+ .market-product-dialog,.market-product-confirm { padding:18px; width:calc(100vw - 24px); }
+ .market-product-fields,.market-product-review-fields,.market-product-before-after { grid-template-columns:minmax(0,1fr); }
+ .market-workflow-heading { align-items:flex-start; flex-wrap:wrap; }
+}

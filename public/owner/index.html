@@ -1343,6 +1343,13 @@
         <div id="motfListingReviewList" class="listing-review-list"><div class="admin-control-empty">심사 요청을 불러오는 중입니다.</div></div>
       </section>
 
+      <section id="panel-master-products" class="panel">
+        <div class="market-workflow-heading"><h2 class="panel-title">상품 심사·변경 알림</h2><button type="button" class="secondary-btn" onclick="motfLoadMarketProductAdmin()"><i data-lucide="refresh-cw"></i>새로고침</button></div>
+        <div id="marketProductAdminStatus" role="status"></div>
+        <div class="market-workflow-tabs"><button type="button" class="secondary-btn" data-market-admin-tab="pending" aria-pressed="true">신규 상품 심사</button><button type="button" class="secondary-btn" data-market-admin-tab="changes" aria-pressed="false">변경 알림</button></div>
+        <div id="marketProductAdminList"></div>
+      </section>
+
       <section id="panel-master-content" class="panel">
         <h2 class="panel-title">리뷰 및 커뮤니티 관리</h2>
         <div class="tab-container">
@@ -1688,6 +1695,7 @@
           <li><button class="menu-item active" id="m-btn-stats" onclick="switchMasterPanel('master-stats')"><i data-lucide="layout-dashboard"></i> 플랫폼 종합 현황</button></li>
           <li><button class="menu-item" id="m-btn-partners" onclick="switchMasterPanel('master-partners')"><i data-lucide="users"></i> 가입 회원 & 업장 관리</button></li>
           <li><button class="menu-item" id="m-btn-listing-reviews" onclick="switchMasterPanel('master-listing-reviews')"><i data-lucide="clipboard-check"></i> 입점·변경 심사</button></li>
+          <li><button class="menu-item" id="m-btn-products" onclick="switchMasterPanel('master-products')"><i data-lucide="package-check"></i> 상품 심사·변경 알림 <span id="marketProductAdminBadge" class="market-workflow-badge" hidden></span></button></li>
           <li><button class="menu-item" id="m-btn-locations" onclick="switchMasterPanel('master-locations')"><i data-lucide="map-pin"></i> 주변 기준 장소</button></li>
           <li><button class="menu-item" id="m-btn-chat-monitor" onclick="switchMasterPanel('master-chat-monitor')"><i data-lucide="messages-square"></i> 전체 채팅 모니터링</button></li>
           <li><button class="menu-item" id="m-btn-cases" onclick="switchMasterPanel('master-cases')"><i data-lucide="badge-help"></i> 문의 & 분쟁 관리</button></li>
@@ -1705,6 +1713,7 @@
       renderMasterOrders();
       renderMasterContent();
       window.motfMountAdminControlTower?.();
+      window.motfRefreshMarketProductBadge?.();
       switchMasterPanel('master-stats');
       lucide.createIcons();
     }
@@ -1720,6 +1729,7 @@
         'master-stats': document.getElementById('m-btn-stats'),
         'master-partners': document.getElementById('m-btn-partners'),
         'master-listing-reviews': document.getElementById('m-btn-listing-reviews'),
+        'master-products': document.getElementById('m-btn-products'),
         'master-locations': document.getElementById('m-btn-locations'),
         'master-chat-monitor': document.getElementById('m-btn-chat-monitor'),
         'master-cases': document.getElementById('m-btn-cases'),
@@ -1738,6 +1748,7 @@
       if(panelId === 'master-chat-monitor') renderMasterChatMonitor();
       if(panelId === 'master-partners') window.motfLoadAdminOrganizationWorkspaces?.();
       if(panelId === 'master-listing-reviews') window.motfLoadListingReviews?.();
+      if(panelId === 'master-products') window.motfLoadMarketProductAdmin?.();
       if(panelId === 'master-cases') renderMasterCases();
       if(panelId === 'master-orders') renderMasterOrders();
       if(panelId === 'master-content') renderMasterContent();
@@ -2112,7 +2123,7 @@
             orderTitle: '주문 및 승인 관리',
             orderSearch: '주문자·단체·상품 검색',
             availabilityTitle: '재고·품절 관리',
-            availabilityHelp: '품절된 상품이나 일시 판매 중단이 필요한 상품을 바로 관리합니다.',
+            availabilityHelp: '상품 추가·수정·삭제, 사진과 판매 순서, 재고·품절 상태를 한 곳에서 관리합니다.',
             tabs: ['승인 대기', '주문 확정', '지난 주문', '거절한 주문'],
           }
         : {
@@ -2240,6 +2251,7 @@
 
     function renderRoomPriceTable() {
       const tbody = document.getElementById('roomPriceTableBody');
+      if (currentOwnerType === 'market') { tbody.innerHTML='';document.getElementById('priceSettingWrapperSector').hidden=true;return; }
       tbody.innerHTML = '';
       const data = mockData[currentOwnerType];
 
@@ -2356,7 +2368,7 @@
       container.innerHTML = '';
       const data = mockData[currentOwnerType];
 
-      data.photoTabs.forEach((tabName, idx) => {
+      (currentOwnerType === 'market' ? data.photoTabs.slice(0,1) : data.photoTabs).forEach((tabName, idx) => {
         const btn = document.createElement('button');
         btn.className = `photo-tab-btn ${idx === currentSelectedPhotoIndex ? 'active' : ''}`;
         btn.innerHTML = `<i data-lucide="image" style="width:14px;"></i> <span>${escapeDashboardHtml(tabName)}</span>`;
@@ -2613,6 +2625,8 @@
       document.getElementById('preview-display-desc').innerText = data.desc;
       
       const summaryArea = document.getElementById('preview-room-prices-summary');
+      summaryArea.hidden = currentOwnerType === 'market';
+      if (currentOwnerType === 'market') { summaryArea.replaceChildren();return; }
       summaryArea.innerHTML = `<strong style="display:block; margin-bottom:4px; color:var(--teal);">🏷️ 실시간 구성 요금 일람 미리보기</strong>`;
       data.rooms.forEach(room => {
         summaryArea.innerHTML += `<div>• ${room.name} : <span style="font-weight:700; color:var(--teal-dark);">${room.price.toLocaleString()}원</span></div>`;
@@ -2754,6 +2768,8 @@
       if (seasonEditor) seasonEditor.hidden = isMarket;
       const facilitySection = document.getElementById('ownerFacilitySection');
       if (facilitySection) facilitySection.hidden = isMarket;
+      document.getElementById('priceSettingWrapperSector').hidden=isMarket;
+      if (isMarket) currentSelectedPhotoIndex=0;
       const title = document.getElementById('dynamic-price-section-title');
       const help = document.getElementById('dynamic-price-section-help');
       const addText = document.getElementById('addBtnDynamicText');
@@ -2763,7 +2779,7 @@
         ? '상품을 추가한 뒤 분류·가격·단위·원산지와 상세 정보를 입력하세요. 저장된 활성 상품만 이용자 화면에 공개됩니다.'
         : '숙박일마다 해당 시즌의 평일/주말 요금이 자동 적용됩니다. 추가인원비는 예약 때 받지 않고 이용 후 별도 요청합니다.';
       if (addText) addText.textContent = isMarket ? '상품 추가' : '객실 추가';
-      if (uploadTitle) uploadTitle.textContent = isMarket ? '상품별 사진 여러 장 관리' : '구역별 사진 여러 장 관리';
+      if (uploadTitle) uploadTitle.textContent = isMarket ? '업장 사진 관리' : '구역별 사진 여러 장 관리';
     }
 
     function showCalendarDayDetail(dayStr, blocks = [], offerings = []) {
@@ -3124,8 +3140,8 @@
       document.getElementById('calcMarginResult').innerText = margin.toFixed(1) + '%';
     }
   </script>
-  <script src="/owner/launch.js?v=20261116-reset"></script>
-  <script src="/owner/business-workspaces.js?v=20261116-launch"></script>
+  <script src="/owner/launch.js?v=20261116-workflow"></script>
+  <script src="/owner/business-workspaces.js?v=20261116-workflow"></script>
   <script>
     /* Supabase 인증 연결층: 원본 화면/스타일은 변경하지 않고 로그인 함수만 교체 */
     (async () => {
@@ -3647,7 +3663,7 @@
     })();
   </script>
   <link rel="stylesheet" href="/owner/pc-1023.css?v=20261023-v1">
-  <script src="/owner/owner-data.js?v=20261116-reset"></script>
+  <script src="/owner/owner-data.js?v=20261116-workflow"></script>
   <script src="/owner/owner-identity.js?v=20261113-regions"></script>
   <link rel="stylesheet" href="/owner/admin-home-banners.css?v=20261103">
   <script src="/owner/admin-home-banners.js?v=20261103"></script>
@@ -3655,13 +3671,15 @@
   <script src="/owner/admin-product-reviews.js?v=20261108"></script>
   <script src="/owner/admin-control.js?v=20261108"></script>
   <script src="/owner/stay-import.js?v=20260907-review1"></script>
-  <script src="/owner/listing-review.js?v=20261116-reset"></script>
+  <script src="/owner/listing-review.js?v=20261116-workflow"></script>
   <script src="/owner/owner-revenue.js?v=20261116-reset"></script>
   <script src="/owner/admin-review-fixes.js?v=20260902-admin-loop1"></script>
   <script src="/owner/admin-organization-handoff.js?v=20261014-workspace80"></script>
-  <script src="/owner/owner-operations.js?v=20261116-reset"></script>
+  <script src="/owner/owner-operations.js?v=20261116-workflow"></script>
   <script src="/owner/admin-pc-1023.js?v=20261023-v1"></script>
-  <script src="/owner/market-pc-1023.js?v=20261116-reset"></script>
+  <script src="/owner/market-pc-1023.js?v=20261116-workflow"></script>
+  <script src="/owner/market-inventory.js?v=20261116-workflow"></script>
+  <link rel="stylesheet" href="/owner/market-inventory.css?v=20261116-workflow">
   <link rel="stylesheet" href="/owner/region-management.css?v=20261113">
   <script src="/owner/region-management.js?v=20261113"></script>
   <link rel="stylesheet" href="/owner/desktop-replies.css?v=20261116">

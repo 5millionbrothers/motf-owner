@@ -15,6 +15,7 @@
     if (!business?.region) missing.push("운영 지역");
     if (!business?.description) missing.push(`${entity} 소개`);
     if (!business?.cover_image_url && !(business?.gallery_image_urls || []).length) missing.push(`${entity} 사진`);
+    if (market) return missing;
     if (!offerings.length) missing.push(`${itemLabel} 정보`);
     const unnamed = offerings.filter((item) => !String(item.name || "").trim()).length;
     const zeroPrice = offerings.filter((item) => Number((market ? item.price : item.offseason_weekday_price ?? item.price) ?? 0) <= 0).length;

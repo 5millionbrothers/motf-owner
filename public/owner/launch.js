@@ -1,5 +1,5 @@
 (function prepareOwnerLaunch() {
-  window.motfMarketCategories = ['정육','주류','음료','과자·안주','즉석밥','라면','채소·농산물','김치·반찬','통조림·가공식품','조미료·소스','숙취해소','일회용품','생활용품','기타'];
+  window.motfMarketCategories = ['정육','주류','음료','과자·안주','채소·김치·반찬','즉석밥','라면','가공식품·조미료','숙취해소','일회용품','기타'];
   window.motfWorkspaceDialogHost = function workspaceDialogHost() {
     let dialog = document.getElementById('motfWorkspaceDialog');
     if (!dialog) {

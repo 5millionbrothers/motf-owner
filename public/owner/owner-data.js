@@ -1200,7 +1200,7 @@
       : null;
     const hasSettlementValue = window.motfIsBusinessRepresentative() && Boolean(settlementPayload.bank_name || settlementPayload.account_number || settlementPayload.account_holder);
 
-    const offeringItems = (window.motfReadOfferingsFromDashboard?.() || []).map((item, index) => ({
+    const offeringItems = (business.business_type === 'market' ? [] : window.motfReadOfferingsFromDashboard?.() || []).map((item, index) => ({
       ...item,
       name: String(item.name || "").trim() || `${business.business_type === "stay" ? "객실" : "상품"} ${index + 1}`,
       price: Math.max(0, Number(item.price) || 0),
@@ -1757,7 +1757,7 @@
     if (!client() || !businessId) return [];
     const { data, error } = await client()
       .from("offerings")
-      .select("id, business_id, name, description, price, unit, category, stock_quantity, is_active, image_url, businesses(id, business_name, business_type)")
+      .select("id, business_id, name, description, price, unit, category, stock_quantity, is_active, image_url, updated_at, market_review_status, market_review_note, businesses(id, business_name, business_type)")
       .eq("business_id", businessId).is("retired_at", null)
       .order("sort_order");
     if (error) {
@@ -1772,20 +1772,23 @@
     const categoryLabel = (value) => value || "기타";
     const stockCardHtml = (item) => {
       const active = item.is_active !== false;
+      const pending = item.market_review_status && item.market_review_status !== 'approved';
+      const statusLabel = item.market_review_status === 'pending' ? '등록 심사 중' : item.market_review_status === 'rejected' ? '등록 반려' : active ? '판매 중' : '품절·숨김';
       const stockText = item.stock_quantity == null ? "재고 수량 미입력" : `${Number(item.stock_quantity).toLocaleString()}개`;
-      return `<article class="motf-market-stock-card ${active ? "" : "is-sold-out"}">
+      return `<article class="motf-market-stock-card ${active ? "" : "is-sold-out"}" data-market-product-id="${item.id}">
         <div class="motf-market-stock-thumb">${item.image_url ? `<img src="${escapeHtml(item.image_url)}" alt="">` : '<i data-lucide="package"></i>'}</div>
         <div class="motf-market-stock-main">
           <div class="motf-market-stock-head">
             <strong>${escapeHtml(item.name || "상품명 미입력")}</strong>
-            <span class="${active ? "master-status-badge master-badge-active" : "master-status-badge master-badge-terminated"}">${active ? "판매 중" : "품절·숨김"}</span>
+            <span class="${active ? "master-status-badge master-badge-active" : "master-status-badge master-badge-terminated"}">${statusLabel}</span>
           </div>
           <p>${escapeHtml([item.category, item.unit, stockText].filter(Boolean).join(" · "))}</p>
           <small>${Number(item.price || 0).toLocaleString()}원${item.description ? ` · ${escapeHtml(String(item.description).slice(0, 60))}` : ""}</small>
+          ${item.market_review_note ? `<small class="market-product-review-note">반려 사유: ${escapeHtml(item.market_review_note)}</small>` : ''}
         </div>
         <div class="motf-market-stock-actions">
-          <button class="secondary-btn" type="button" ${active ? "" : "disabled"} onclick="motfSetMarketProductAvailability('${item.id}', false)">품절 처리</button>
-          <button class="primary-btn" type="button" ${active ? "disabled" : ""} onclick="motfSetMarketProductAvailability('${item.id}', true)">판매 재개</button>
+          ${window.motfHasBusinessPermission?.('listing') ? `<button class="secondary-btn" type="button" data-edit-market-product="${item.id}"><i data-lucide="pencil"></i>편집</button><button class="secondary-btn" type="button" data-delete-market-product="${item.id}" data-product-version="${escapeHtml(item.updated_at || '')}"><i data-lucide="trash-2"></i>삭제</button>` : ''}
+          ${pending || !window.motfHasBusinessPermission?.('availability') ? '' : `<button class="secondary-btn" type="button" ${active ? "" : "disabled"} onclick="motfSetMarketProductAvailability('${item.id}', false)">품절 처리</button><button class="primary-btn" type="button" ${active ? "disabled" : ""} onclick="motfSetMarketProductAvailability('${item.id}', true)">판매 재개</button>`}
         </div>
       </article>`;
     };
@@ -1806,13 +1809,14 @@
             </section>`;
           })
           .join("")
-      : '<div class="owner-empty-state"><i data-lucide="package-open"></i><p>등록된 판매 상품이 없습니다. 마이페이지에서 상품을 먼저 등록해주세요.</p></div>';
+      : '<div class="owner-empty-state"><i data-lucide="package-open"></i><p>등록된 상품이 없습니다. 상품 추가로 등록 심사를 요청해주세요.</p></div>';
 
     return `
       <div class="info-panel motf-market-inventory-panel">
         <div class="section-toolbar">
-          <h3 style="margin:0;">상품 재고·품절 처리</h3>
-          <span>상품 정보 자체는 건드리지 않고, 이용자 화면 노출 여부만 빠르게 전환합니다.</span>
+          <h3 style="margin:0;">상품 관리</h3>
+          ${window.motfHasBusinessPermission?.('listing') ? '<button class="primary-btn" type="button" data-add-market-product><i data-lucide="plus"></i>상품 추가</button>' : ''}
+          <span>상품 추가·편집·삭제와 재고·품절 상태를 한 곳에서 관리합니다.</span>
         </div>
         <label class="market-stock-search"><span>상품 검색</span><input type="search" data-market-stock-search placeholder="상품명·카테고리·판매 단위 검색" autocomplete="off"></label>
         <div class="motf-market-stock-category-list">${rows}</div>
@@ -1822,7 +1826,9 @@
   }
 
   async function renderAvailabilityManager(scope, businessId = null) {
-    if (scope === "partner" && !window.motfHasBusinessPermission?.("availability")) return;
+    const canManageInventory = () => window.motfHasBusinessPermission?.("availability") ||
+      (window.motfCurrentBusiness?.business_type === 'market' && window.motfHasBusinessPermission?.('listing'));
+    if (scope === "partner" && !canManageInventory()) return;
     const targetId = scope === "master" ? "masterOrderListArea" : "orderListArea";
     const list = document.getElementById(targetId);
     if (!list) return;
@@ -1834,7 +1840,7 @@
     }
     if (scope === "partner" && window.motfCurrentBusiness?.business_type === "market") {
       const products = await loadMarketInventoryData(businessId);
-      if (window.motfCurrentBusiness?.id !== businessId || !window.motfHasBusinessPermission?.("availability")) return;
+      if (window.motfCurrentBusiness?.id !== businessId || !canManageInventory()) return;
       const previousSearch=box.dataset.businessId===businessId ? box.querySelector('[data-market-stock-search]')?.value || '' : '';
       box.dataset.businessId=businessId;
       box.innerHTML = marketInventoryBoxHtml(products);
