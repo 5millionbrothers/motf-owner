@@ -194,7 +194,7 @@
     if (!force && settlements.length) return renderSettlements();
     const target = $("#ownerSettlementList");
     if (target) target.innerHTML = '<div class="owner-loading-state">정산 내역을 불러오는 중입니다.</div>';
-    const { data, error } = await client().rpc("list_own_partner_settlements");
+    const { data, error } = await client().rpc("list_launch_partner_settlements");
     if (version !== workspaceVersion || !can("settlements")) return;
     if (error) {
       if (target) target.innerHTML = empty(`정산 내역을 불러오지 못했습니다. DB 62번 적용 여부를 확인해주세요. (${error.message})`);

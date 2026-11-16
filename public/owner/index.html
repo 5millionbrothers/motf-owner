@@ -703,10 +703,10 @@
       .motf-location-actions { align-items: flex-start; flex-direction: column; }
     }
   </style>
-  <link rel="stylesheet" href="/owner/owner-data.css?v=20261108">
+  <link rel="stylesheet" href="/owner/owner-data.css?v=20261116-reset">
   <link rel="stylesheet" href="/owner/stay-import.css?v=20260907-stayimport2">
   <link rel="stylesheet" href="/owner/stay-import-images.css?v=20260907-stayimport5">
-  <link rel="stylesheet" href="/owner/listing-review.css?v=20260907-review1">
+  <link rel="stylesheet" href="/owner/listing-review.css?v=20261116-reset">
   <link rel="stylesheet" href="/owner/business-workspaces.css?v=20261014-workspace80">
   <link rel="stylesheet" href="/owner/brand.css?v=20261103-symbol">
 </head>
@@ -1118,7 +1118,7 @@
             </div>
           </div>
 
-          <div>
+          <div id="ownerFacilitySection">
             <label style="display:block; font-weight:600;" id="dynamic-facility-label-title">제공 시설 편의 및 상품 옵션 설정</label>
             <div class="facility-container-vertical" id="facilityCheckGrid"></div>
           </div>
@@ -2752,6 +2752,8 @@
       const seasonEditor = document.getElementById('motfSeasonCalendarEditor');
       if (highlightEditor) highlightEditor.hidden = isMarket;
       if (seasonEditor) seasonEditor.hidden = isMarket;
+      const facilitySection = document.getElementById('ownerFacilitySection');
+      if (facilitySection) facilitySection.hidden = isMarket;
       const title = document.getElementById('dynamic-price-section-title');
       const help = document.getElementById('dynamic-price-section-help');
       const addText = document.getElementById('addBtnDynamicText');
@@ -3122,7 +3124,7 @@
       document.getElementById('calcMarginResult').innerText = margin.toFixed(1) + '%';
     }
   </script>
-  <script src="/owner/launch.js?v=20261116"></script>
+  <script src="/owner/launch.js?v=20261116-reset"></script>
   <script src="/owner/business-workspaces.js?v=20261116-launch"></script>
   <script>
     /* Supabase 인증 연결층: 원본 화면/스타일은 변경하지 않고 로그인 함수만 교체 */
@@ -3645,7 +3647,7 @@
     })();
   </script>
   <link rel="stylesheet" href="/owner/pc-1023.css?v=20261023-v1">
-  <script src="/owner/owner-data.js?v=20261116-launch"></script>
+  <script src="/owner/owner-data.js?v=20261116-reset"></script>
   <script src="/owner/owner-identity.js?v=20261113-regions"></script>
   <link rel="stylesheet" href="/owner/admin-home-banners.css?v=20261103">
   <script src="/owner/admin-home-banners.js?v=20261103"></script>
@@ -3653,17 +3655,17 @@
   <script src="/owner/admin-product-reviews.js?v=20261108"></script>
   <script src="/owner/admin-control.js?v=20261108"></script>
   <script src="/owner/stay-import.js?v=20260907-review1"></script>
-  <script src="/owner/listing-review.js?v=20261116-launch"></script>
-  <script src="/owner/owner-revenue.js?v=20261014-workspace80"></script>
+  <script src="/owner/listing-review.js?v=20261116-reset"></script>
+  <script src="/owner/owner-revenue.js?v=20261116-reset"></script>
   <script src="/owner/admin-review-fixes.js?v=20260902-admin-loop1"></script>
   <script src="/owner/admin-organization-handoff.js?v=20261014-workspace80"></script>
-  <script src="/owner/owner-operations.js?v=20261116-launch"></script>
+  <script src="/owner/owner-operations.js?v=20261116-reset"></script>
   <script src="/owner/admin-pc-1023.js?v=20261023-v1"></script>
-  <script src="/owner/market-pc-1023.js?v=20261116-launch"></script>
+  <script src="/owner/market-pc-1023.js?v=20261116-reset"></script>
   <link rel="stylesheet" href="/owner/region-management.css?v=20261113">
   <script src="/owner/region-management.js?v=20261113"></script>
   <link rel="stylesheet" href="/owner/desktop-replies.css?v=20261116">
-  <link rel="stylesheet" href="/owner/launch.css?v=20261116">
+  <link rel="stylesheet" href="/owner/launch.css?v=20261116-reset">
   <script src="/owner/desktop-replies.js?v=20261116"></script>
 </body>
 </html>

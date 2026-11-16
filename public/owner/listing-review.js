@@ -6,22 +6,24 @@
 
   function missingItems(business, offerings) {
     const missing = [];
-    if (!business?.business_name || business.business_name === "숙소명 확인 필요") missing.push("숙소명");
+    const market = business?.business_type === 'market';
+    const entity = market ? '업장' : '숙소', itemLabel = market ? '상품' : '객실';
+    if (!business?.business_name || business.business_name === "숙소명 확인 필요") missing.push(`${entity}명`);
     if (!business?.representative_name || business.representative_name === "확인 필요") missing.push("대표자명");
-    if (!business?.phone) missing.push("숙소 연락처");
+    if (!business?.phone) missing.push(`${entity} 연락처`);
     if (!business?.address) missing.push("기본 주소");
     if (!business?.region) missing.push("운영 지역");
-    if (!business?.description) missing.push("숙소 소개");
-    if (!business?.cover_image_url && !(business?.gallery_image_urls || []).length) missing.push("숙소 사진");
-    if (!offerings.length) missing.push("객실 정보");
+    if (!business?.description) missing.push(`${entity} 소개`);
+    if (!business?.cover_image_url && !(business?.gallery_image_urls || []).length) missing.push(`${entity} 사진`);
+    if (!offerings.length) missing.push(`${itemLabel} 정보`);
     const unnamed = offerings.filter((item) => !String(item.name || "").trim()).length;
-    const zeroPrice = offerings.filter((item) => Number(item.offseason_weekday_price ?? item.price ?? 0) <= 0).length;
+    const zeroPrice = offerings.filter((item) => Number((market ? item.price : item.offseason_weekday_price ?? item.price) ?? 0) <= 0).length;
     const noCapacity = offerings.filter((item) => Number(item.base_people || 0) <= 0 || Number(item.max_people || 0) <= 0).length;
     const noPhotos = offerings.filter((item) => !item.image_url && !(item.image_urls || []).length).length;
-    if (unnamed) missing.push(`객실명 ${unnamed}개`);
-    if (zeroPrice) missing.push(`비수기 평일 요금 ${zeroPrice}개 객실`);
-    if (noCapacity) missing.push(`기준·최대 인원 ${noCapacity}개 객실`);
-    if (noPhotos) missing.push(`객실 사진 ${noPhotos}개 객실`);
+    if (unnamed) missing.push(`${itemLabel}명 ${unnamed}개`);
+    if (zeroPrice) missing.push(market ? `상품 가격 ${zeroPrice}개` : `비수기 평일 요금 ${zeroPrice}개 객실`);
+    if (!market && noCapacity) missing.push(`기준·최대 인원 ${noCapacity}개 객실`);
+    if (noPhotos) missing.push(`${itemLabel} 사진 ${noPhotos}개`);
     return missing;
   }
 
@@ -56,7 +58,7 @@
     if (!business || !window.motfHasBusinessPermission?.("listing") || business.approval_status === "approved") return;
     const [{ data: freshBusiness, error: businessError }, { data: offerings, error: offeringError }] = await Promise.all([
       client().from("businesses").select("*").eq("id", business.id).single(),
-      client().from("offerings").select("*").eq("business_id", business.id).order("sort_order"),
+      client().from("offerings").select("*").eq("business_id", business.id).is("retired_at",null).order("sort_order"),
     ]);
     if (businessError || offeringError) return alert((businessError || offeringError).message);
     const missing = missingItems(freshBusiness, offerings || []);

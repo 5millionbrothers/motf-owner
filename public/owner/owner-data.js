@@ -1814,7 +1814,9 @@
           <h3 style="margin:0;">상품 재고·품절 처리</h3>
           <span>상품 정보 자체는 건드리지 않고, 이용자 화면 노출 여부만 빠르게 전환합니다.</span>
         </div>
+        <label class="market-stock-search"><span>상품 검색</span><input type="search" data-market-stock-search placeholder="상품명·카테고리·판매 단위 검색" autocomplete="off"></label>
         <div class="motf-market-stock-category-list">${rows}</div>
+        <p data-market-stock-empty hidden role="status">검색 조건에 맞는 상품이 없습니다.</p>
       </div>
     `;
   }
@@ -1833,8 +1835,28 @@
     if (scope === "partner" && window.motfCurrentBusiness?.business_type === "market") {
       const products = await loadMarketInventoryData(businessId);
       if (window.motfCurrentBusiness?.id !== businessId || !window.motfHasBusinessPermission?.("availability")) return;
+      const previousSearch=box.dataset.businessId===businessId ? box.querySelector('[data-market-stock-search]')?.value || '' : '';
+      box.dataset.businessId=businessId;
       box.innerHTML = marketInventoryBoxHtml(products);
       window.motfPcMarketInventoryMounted?.(box,products);
+      const search=box.querySelector('[data-market-stock-search]');
+      search.value=previousSearch;
+      const filterProducts=()=>{
+        const query=search.value.trim().toLocaleLowerCase('ko-KR');
+        let count=0;
+        box.querySelectorAll('.motf-market-stock-category').forEach(section=>{
+          let matches=0;
+          section.querySelectorAll('.motf-market-stock-card').forEach(card=>{card.hidden=!card.textContent.toLocaleLowerCase('ko-KR').includes(query);if(!card.hidden) matches++;});
+          section.hidden=matches===0;
+          if(!section.classList.contains('pc1023-product-hidden')) count+=matches;
+        });
+        box.querySelector('[data-market-stock-empty]').hidden=count>0 || !products.length;
+      };
+      search.addEventListener('input',filterProducts);
+      if(box.motfStockFilter) box.removeEventListener('motf:stock-filter-change',box.motfStockFilter);
+      box.motfStockFilter=filterProducts;
+      box.addEventListener('motf:stock-filter-change',filterProducts);
+      filterProducts();
       window.motfApplyAvailabilityCalendarData?.({ offerings: [], blocks: [] });
       window.lucide?.createIcons();
       return;
@@ -1934,7 +1956,7 @@
     if (window.motfCurrentBusiness?.id !== business.id || !window.motfHasBusinessPermission("reservations")) return;
     if (error) return console.error(error);
     await client().rpc("release_expired_checkout_intents");
-    const { data: pendingIntents, error: pendingIntentError } = await client().rpc("list_pending_payment_intents", {
+    const { data: pendingIntents, error: pendingIntentError } = await client().rpc("list_launch_pending_payment_intents", {
       target_business_id: business.id,
     });
     if (pendingIntentError) console.warn("Could not load pending payment intents.", pendingIntentError);
@@ -2049,7 +2071,7 @@
       client().from("businesses").select("id, business_name, business_type"),
       client().from("reservations").select("id, business_id, customer_name, group_name, event_date, offering_name, total_amount, status, reject_reason, refund_status, refund_amount, created_at").is("launch_archived_at",null).order("created_at", { ascending: false }),
       client().from("market_orders").select("id, business_id, customer_name, pickup_time, total_amount, status, reject_reason, refund_status, refund_amount, created_at, market_order_items(item_name, quantity)").is("launch_archived_at",null).order("created_at", { ascending: false }),
-      client().rpc("list_pending_payment_intents", { target_business_id: null }),
+      client().rpc("list_launch_pending_payment_intents", { target_business_id: null }),
     ]);
     if (businessResult.error || reservationResult.error || orderResult.error || intentResult.error) return console.error(businessResult.error || reservationResult.error || orderResult.error || intentResult.error);
     const businesses = businessResult.data || [];
@@ -2117,7 +2139,7 @@
 
   async function loadMotfAdminSettlements() {
     if (!client() || window.motfCurrentProfile?.role !== "admin") return;
-    const { data, error } = await client().rpc("list_partner_settlements");
+    const { data, error } = await client().rpc("list_launch_admin_settlements");
     if (error) {
       console.warn("Could not load partner settlements.", error);
       adminSettlements = [];
@@ -2332,8 +2354,9 @@
   let partnerChatLoadVersion = 0;
   let pendingChatLink = new URLSearchParams(window.location.search).get("conversationId") || "";
 
-  function mapMessages(messages = [], support = false) {
+  function mapMessages(messages = [], support = false, visibleFrom = null) {
     return [...messages]
+      .filter(message => !visibleFrom || new Date(message.created_at).getTime() >= new Date(visibleFrom).getTime())
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
       .map((message) => ({
         id: message.id,
@@ -2420,31 +2443,31 @@
     if (relevant.error) { mockData[currentOwnerType].chats = []; window.renderChatList?.(); return console.error(relevant.error); }
     const relevantIds = (relevant.data || []).map(row => row.id);
     const businessQuery = relevantIds.length ? client().from("conversations")
-      .select("id, organization_id, customer_name, group_name, last_message_at, conversation_contact_shares(contact_name,phone,last_shared_at), messages(id, sender_name, sender_role, body, created_at)")
+      .select("id, organization_id, customer_name, group_name, last_message_at, history_started_at, conversation_contact_shares(contact_name,phone,last_shared_at), messages(id, sender_name, sender_role, body, created_at)")
       .eq("business_id", business.id).in("id", relevantIds)
       .order("last_message_at", { ascending: false }) : Promise.resolve({data: [], error: null});
     const supportQuery = supportConversationId
-      ? client().from("conversations").select("id, organization_id, customer_name, group_name, last_message_at, messages(id, sender_name, sender_role, body, created_at)").eq("id", supportConversationId).limit(1)
+      ? client().from("conversations").select("id, organization_id, customer_name, group_name, last_message_at, history_started_at, messages(id, sender_name, sender_role, body, created_at)").eq("id", supportConversationId).limit(1)
       : Promise.resolve({ data: [], error: null });
     const [businessResult, supportResult] = await Promise.all([businessQuery, supportQuery]);
     if (version !== partnerChatLoadVersion) return;
     if (businessResult.error || supportResult.error) return console.error(businessResult.error || supportResult.error);
     const businessChats = (businessResult.data || []).map((conversation) => {
-      const messages = mapMessages(conversation.messages);
+      const messages = mapMessages(conversation.messages, false, conversation.history_started_at);
       const userLabel = conversation.organization_id ? `단체 · ${conversation.group_name || "단체 문의"}` : conversation.group_name
         ? `${conversation.customer_name} (${conversation.group_name})`
         : conversation.customer_name;
       return {
         conversationId: conversation.id,
         user: userLabel,
-        contactShares: conversation.conversation_contact_shares || [],
+        contactShares: (conversation.conversation_contact_shares || []).filter(row => !conversation.history_started_at || new Date(row.last_shared_at).getTime() >= new Date(conversation.history_started_at).getTime()),
         status: "대화 중",
         preview: messages.at(-1)?.text || "새 대화가 시작되었습니다.",
         messages,
       };
     });
     const supportChats = (supportResult.data || []).map((conversation) => {
-      const messages = mapMessages(conversation.messages, true);
+      const messages = mapMessages(conversation.messages, true, conversation.history_started_at);
       return {
         conversationId: conversation.id,
         user: "모티프 운영팀",
@@ -2510,14 +2533,14 @@
     const [businessResult, conversationResult] = await Promise.all([
       client().from("businesses").select("id, business_name, business_type, representative_name").order("business_name"),
       client().from("conversations")
-        .select("id, business_id, organization_id, customer_name, group_name, last_message_at, messages(id, sender_name, sender_role, body, created_at)").is("launch_archived_at",null)
+        .select("id, business_id, organization_id, customer_name, group_name, last_message_at, history_started_at, messages(id, sender_name, sender_role, body, created_at)").is("launch_archived_at",null)
         .order("last_message_at", { ascending: false }),
     ]);
     if (businessResult.error || conversationResult.error) return console.error(businessResult.error || conversationResult.error);
     adminChatBusinesses = businessResult.data || [];
     adminChatConversations = (conversationResult.data || []).map((conversation) => ({
       ...conversation,
-      messages: mapMessages(conversation.messages),
+      messages: mapMessages(conversation.messages, false, conversation.history_started_at),
     }));
     const linkedChat = adminChatConversations.find((chat) => chat.id === pendingChatLink);
     if (linkedChat) {

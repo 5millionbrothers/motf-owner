@@ -27,4 +27,8 @@
 .preview-box.is-expanded .owner-preview-content { max-height: none; }
 .preview-box.is-expanded .owner-description-preview { display: block; max-height: none; overflow: visible; -webkit-line-clamp: unset; }
 .owner-preview-toggle { margin-top: 12px; }
+.market-stock-search { display: grid; gap: 6px; max-width: 500px; margin: 16px 0; }
+.market-stock-search span { font-size: 12px; font-weight: 600; }
+.market-stock-search input { width: 100%; min-height: 40px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; color: var(--ink); }
+.motf-market-stock-card[hidden], .motf-market-stock-category[hidden], [data-market-stock-empty][hidden] { display: none!important; }
 @media(max-width:600px) { .owner-workspace-dialog #motfWorkspaceManagement fieldset { grid-template-columns: repeat(2,max-content); } }

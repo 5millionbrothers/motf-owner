@@ -4,7 +4,8 @@
   const categories=window.motfMarketCategories;
   const category=v=>v || '기타';
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  let editCategory='',stockCategory='전체',photoCategory='',products=[],groups=[],previewCategory='전체',dirty=false,requestId=0;
+  let editCategory='전체',stockCategory='전체',photoCategory='',products=[],groups=[],previewCategory='전체',dirty=false,requestId=0;
+  const visibleCategories=items=>[...new Set(items.map(item=>category(item.category)))];
   const selectors=(items,value,attribute)=>`<div class="pc1023-category-choices">${items.map(c=>`<button type="button" class="secondary-btn" ${attribute}="${esc(c)}" aria-pressed="${value===c}">${esc(c)}</button>`).join('')}</div>`;
   const originalEditor=window.renderRoomPriceTable;
   window.renderRoomPriceTable=function(...args) {
@@ -12,11 +13,13 @@
     if(!market()) return;
     const body=document.getElementById('roomPriceTableBody');
     const sections=[...body.querySelectorAll('.market-product-category-section')];
-    body.insertAdjacentHTML('afterbegin',`<div class="pc1023-market-editor-picker"><strong>1. 카테고리 선택</strong>${selectors(categories,editCategory,'data-edit-category')}<p>${editCategory?'2. 편집할 상품을 선택하세요.':'카테고리를 선택하면 해당 상품만 표시됩니다.'}</p><button type="button" class="secondary-btn" data-edit-preview>이용자 페이지 미리보기 · 상품 배치</button></div>`);
+    const available=['전체',...visibleCategories(mockData.market.rooms)];
+    if(!available.includes(editCategory)) editCategory='전체';
+    body.insertAdjacentHTML('afterbegin',`<div class="pc1023-market-editor-picker"><strong>카테고리</strong>${selectors(available,editCategory,'data-edit-category')}<button type="button" class="secondary-btn" data-edit-preview>이용자 페이지 미리보기 · 상품 배치</button></div>`);
     body.querySelector('[data-edit-preview]').onclick=openPreview;
     sections.forEach(section=>{
       const label=section.querySelector('.market-product-category-head strong').textContent;
-      section.classList.toggle('pc1023-product-hidden',label!==editCategory);
+      section.classList.toggle('pc1023-product-hidden',editCategory!=='전체' && label!==editCategory);
       section.querySelectorAll('.owner-room-editor').forEach(card=>{
         const button=document.createElement('button');button.type='button';button.className='secondary-btn';button.textContent='상품 편집';button.dataset.toggleProduct='';button.setAttribute('aria-expanded','false');
         card.querySelector('.owner-room-editor-head').append(button);
@@ -32,10 +35,9 @@
   const originalAdd=window.addTableRow;
   window.addTableRow=function(...args) {
     if(!market()) return originalAdd.apply(this,args);
-    if(!editCategory) { alert('상품을 추가할 카테고리를 먼저 선택해주세요.');return; }
     const before=mockData.market.rooms.length;
     originalAdd.apply(this,args);
-    if(mockData.market.rooms.length>before) mockData.market.rooms.at(-1).category=editCategory;
+    if(mockData.market.rooms.length>before) mockData.market.rooms.at(-1).category=editCategory==='전체'?'기타':editCategory;
     window.renderRoomPriceTable();
     const last=[...document.querySelectorAll('#roomPriceTableBody .market-product-category-section')].find(s=>s.querySelector('strong')?.textContent===editCategory)?.querySelector('.owner-room-editor:last-child [data-toggle-product]');
     last?.click();
@@ -47,7 +49,7 @@
     const host=document.getElementById('photoCategoryContainer');
     const tabs=[...host.children];
     if(currentSelectedPhotoIndex>0 && mockData.market.rooms[currentSelectedPhotoIndex-1]) photoCategory=category(mockData.market.rooms[currentSelectedPhotoIndex-1].category);
-    host.insertAdjacentHTML('afterbegin',selectors(['업장 외관',...categories],photoCategory || '업장 외관','data-photo-category'));
+    host.insertAdjacentHTML('afterbegin',selectors(['업장 외관',...visibleCategories(mockData.market.rooms)],photoCategory || '업장 외관','data-photo-category'));
     tabs.forEach((tab,i)=>tab.classList.toggle('pc1023-product-hidden',i===0 ? Boolean(photoCategory) : !photoCategory || category(mockData.market.rooms[i-1]?.category)!==photoCategory));
     host.querySelectorAll('[data-photo-category]').forEach(b=>b.onclick=()=>{
       photoCategory=b.dataset.photoCategory==='업장 외관'?'':b.dataset.photoCategory;
@@ -59,9 +61,10 @@
   window.motfPcMarketInventoryMounted=function(box,items) {
     if(!market()) return;
     const sections=[...box.querySelectorAll('.motf-market-stock-category')];
-    const available=['전체',...new Set(items.map(p=>category(p.category)))];
+    const available=['전체',...visibleCategories(items)];
+    if(!available.includes(stockCategory)) stockCategory='전체';
     box.insertAdjacentHTML('afterbegin',`<div class="pc1023-stock-picker"><strong>카테고리 선택</strong>${selectors(available,stockCategory,'data-stock-category')}<p>카테고리를 선택한 뒤 재고·품절 상태를 관리하세요.</p>${window.motfHasBusinessPermission?.('listing')?'<button type="button" class="primary-btn" data-open-product-preview>이용자 페이지 미리보기 · 상품 배치</button>':''}</div>`);
-    function filter() { sections.forEach(s=>s.classList.toggle('pc1023-product-hidden',stockCategory!=='전체' && s.querySelector('strong').textContent!==stockCategory)); }
+    function filter() { sections.forEach(s=>s.classList.toggle('pc1023-product-hidden',stockCategory!=='전체' && s.querySelector('strong').textContent!==stockCategory));box.dispatchEvent(new Event('motf:stock-filter-change')); }
     filter();
     box.querySelectorAll('[data-stock-category]').forEach(b=>b.onclick=()=>{stockCategory=b.dataset.stockCategory;box.querySelectorAll('[data-stock-category]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));filter();});
     box.querySelector('[data-open-product-preview]')?.addEventListener('click',openPreview);
@@ -88,9 +91,10 @@
   }
   function renderPreview() {
     const content=dialog.querySelector('[data-preview-content]');
-    content.innerHTML=selectors(['전체',...new Set(groups.map(g=>category(g[0].category)))],previewCategory,'data-preview-category')+`<div class="pc1023-preview-grid">${groups.map((items,index)=>{
-      const p=items[0];if(previewCategory!=='전체' && category(p.category)!==previewCategory) return '';
-      return `<article class="pc1023-preview-product" draggable="true" data-product-position="${index}">${p.image_url?`<img src="${esc(p.image_url)}" alt="">`:'<div class="pc1023-preview-noimage">사진 없음</div>'}<strong>${esc(p.name)}</strong><span>${Number(Math.min(...items.map(i=>Number(i.price)||0))).toLocaleString()}원${items.length>1?'부터':''}</span><small>${items.length>1?`${items.length}개 옵션 · `:''}${items.some(i=>i.is_active)?'판매 중':'품절·숨김'}</small><div class="pc1023-actions"><button type="button" class="secondary-btn" data-product-move="-1" aria-label="${esc(p.name)} 앞으로">←</button><button type="button" class="secondary-btn" data-product-move="1" aria-label="${esc(p.name)} 뒤로">→</button></div></article>`;
+    content.innerHTML=selectors(['전체',...new Set(groups.filter(g=>g.some(p=>p.is_active)).map(g=>category(g[0].category)))],previewCategory,'data-preview-category')+`<div class="pc1023-preview-grid">${groups.map((items,index)=>{
+      const active=items.filter(p=>p.is_active);if(!active.length) return '';
+      const p=active.find(p=>p.detail_sections?.isDefaultVariant===true)||active[0];if(previewCategory!=='전체' && category(p.category)!==previewCategory) return '';
+      return `<article class="pc1023-preview-product" draggable="true" data-product-position="${index}">${p.image_url?`<img src="${esc(p.image_url)}" alt="">`:'<div class="pc1023-preview-noimage">사진 없음</div>'}<strong>${esc(p.name)}</strong><span>${Number(Math.min(...active.map(i=>Number(i.price)||0))).toLocaleString()}원${active.length>1?'부터':''}</span><small>${active.length>1?`${active.length}개 옵션 · `:''}${items.some(i=>i.is_active)?'판매 중':'품절·숨김'}</small><div class="pc1023-actions"><button type="button" class="secondary-btn" data-product-move="-1" aria-label="${esc(p.name)} 앞으로">←</button><button type="button" class="secondary-btn" data-product-move="1" aria-label="${esc(p.name)} 뒤로">→</button></div></article>`;
     }).join('')}</div>${previewCategory?'':'<p>배치할 카테고리를 선택해주세요.</p>'}`;
     content.querySelectorAll('[data-preview-category]').forEach(b=>b.onclick=()=>{previewCategory=b.dataset.previewCategory;renderPreview();});
     let dragged=null;
@@ -98,7 +102,7 @@
       card.ondragstart=e=>{dragged=Number(card.dataset.productPosition);e.dataTransfer.setData('text/plain',String(dragged));e.dataTransfer.effectAllowed='move';};
       card.ondragover=e=>{e.preventDefault();e.dataTransfer.dropEffect='move';};
       card.ondrop=e=>{e.preventDefault();if(dragged!=null) move(dragged,Number(card.dataset.productPosition));};
-      card.querySelectorAll('[data-product-move]').forEach(b=>b.onclick=()=>{const indices=groups.map((g,i)=>(previewCategory==='전체' || category(g[0].category)===previewCategory)?i:-1).filter(i=>i>=0);const at=indices.indexOf(Number(card.dataset.productPosition));const to=indices[at+Number(b.dataset.productMove)];if(to!=null) move(Number(card.dataset.productPosition),to);});
+      card.querySelectorAll('[data-product-move]').forEach(b=>b.onclick=()=>{const indices=groups.map((g,i)=>g.some(p=>p.is_active) && (previewCategory==='전체' || category(g[0].category)===previewCategory)?i:-1).filter(i=>i>=0);const at=indices.indexOf(Number(card.dataset.productPosition));const to=indices[at+Number(b.dataset.productMove)];if(to!=null) move(Number(card.dataset.productPosition),to);});
     });
     dialog.querySelector('[data-save-product-order]').disabled=!dirty || saving;
   }
@@ -128,5 +132,5 @@
   };
   function close(e) { if(saving || (dirty && !confirm('저장하지 않은 배치를 닫을까요?'))) { e?.preventDefault();return; } ++requestId;dialog.close(); }
   dialog.querySelector('[data-preview-close]').onclick=close;dialog.oncancel=close;
-  window.addEventListener('motf:owner-workspace-clear',()=>{editCategory='';stockCategory='전체';photoCategory='';++requestId;dialog.close();});
+  window.addEventListener('motf:owner-workspace-clear',()=>{editCategory='전체';stockCategory='전체';photoCategory='';++requestId;dialog.close();});
 })();
