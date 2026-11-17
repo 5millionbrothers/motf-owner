@@ -997,8 +997,9 @@
           <label>연락 이메일
             <input id="motfOwnerEmail" readonly placeholder="연락 이메일" />
           </label>
-          <label>사장님 연락처
-            <input id="motfOwnerPhone" maxlength="30" autocomplete="tel" placeholder="010-0000-0000" />
+          <label>계정 연락처
+            <input id="motfOwnerPhone" maxlength="30" autocomplete="off" placeholder="010-0000-0000" />
+            <button type="button" id="motfOwnerPhoneSave" class="secondary-btn" onclick="motfSaveOwnerPhone()">계정 연락처 저장</button>
           </label>
           <label>정산 은행
             <input id="motfSettlementBank" maxlength="40" placeholder="예: 국민은행" />
@@ -3674,7 +3675,9 @@
     })();
   </script>
   <link rel="stylesheet" href="/owner/pc-1023.css?v=20261023-v1">
-  <script src="/owner/owner-data.js?v=20261117-review-identity"></script>
+  <script src="/owner/owner-data.js?v=20261117-contact-safety"></script>
+  <script src="/owner/notification-contacts.js?v=20261117-contact-safety"></script>
+  <link rel="stylesheet" href="/owner/notification-contacts.css?v=20261117-contact-safety">
   <script src="/owner/admin-contact-inbox.js?v=20261117"></script>
   <link rel="stylesheet" href="/owner/admin-contact-inbox.css?v=20261117" />
   <link rel="stylesheet" href="/owner/chat-meta.css?v=20261116-signup-chat">
@@ -3705,6 +3708,6 @@
   <link rel="stylesheet" href="/owner/launch.css?v=20261116-reset">
   <script src="/owner/desktop-replies.js?v=20261116"></script>
   <link rel="stylesheet" href="/owner/reservation-demo.css?v=20261117-demo1">
-  <script src="/owner/reservation-demo.js?v=20261117-demo-urgent"></script>
+  <script src="/owner/reservation-demo.js?v=20261117-contact-safety"></script>
 </body>
 </html>

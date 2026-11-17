@@ -1,0 +1,7 @@
+#notificationContactManager{margin:20px 0 28px;padding:16px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+#notificationContactManager summary{cursor:pointer;font-weight:600;color:var(--teal-dark)}
+#notificationContactManager form{padding:16px 0;border-bottom:1px solid var(--line)}
+#notificationContactManager form:last-child{border-bottom:0}
+#notificationContactManager form>span{margin-left:16px;font-size:13px;color:var(--muted)}
+#notificationContactManager label{display:inline-flex;width:auto;max-width:100%;gap:10px;align-items:center;margin-right:10px;font-size:13px;white-space:nowrap}
+#notificationContactManager input{width:220px;max-width:240px}

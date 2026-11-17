@@ -618,8 +618,8 @@
         <input id="motfRepresentativeName" maxlength="50" autocomplete="name" />
       </label>
       <label>업장 연락처
-        <input id="motfBusinessPhone" maxlength="30" autocomplete="tel" />
-        <small class="motf-field-status">휴대폰 본인확인은 KCP 본인확인 결과로 자동 반영됩니다.</small>
+        <input id="motfBusinessPhone" maxlength="30" autocomplete="off" />
+        <small class="motf-field-status">이용자에게 공개할 업장 번호입니다. 계정 연락처·알림 수신번호와 별도로 관리됩니다.</small>
       </label>
       <label>사업자등록번호
         <span class="motf-address-search-row">
@@ -679,7 +679,7 @@
     const values = {
       motfOwnerUsername: profile.username || "",
       motfOwnerEmail: profile.email || "",
-      motfOwnerPhone: profile.phone || business.phone || "",
+      motfOwnerPhone: profile.phone || "",
       motfSettlementBank: settlement.bank_name || "",
       motfSettlementAccount: settlement.account_number || "",
       motfSettlementHolder: settlement.account_holder || business.representative_name || profile.full_name || "",
@@ -695,7 +695,8 @@
     if (usernameButton) usernameButton.hidden = Boolean(profile.username);
     Object.entries(values).forEach(([id, value]) => {
       const input = document.getElementById(id);
-      if (input && (id === "motfOwnerUsername" || id.startsWith("motfMarket") || !input.value)) input.value = value || "";
+      if (input && (id === "motfOwnerUsername" || id.startsWith("motfMarket") || input.dataset.profileId !== profile.id || !input.value)) input.value = value || "";
+      if (input) input.dataset.profileId = profile.id || "";
     });
   }
 
@@ -1035,12 +1036,15 @@
   window.loadMotfPartnerBusiness = function loadMotfPartnerBusiness(business) {
     if (!business || !window.motfHasBusinessPermission?.("listing")) return;
     ensurePartnerFields();
+    const contactField = document.getElementById("motfBusinessPhone");
+    if (contactField) contactField.dataset.businessId = business.id;
     populateOwnerAccountFields();
     if (window.motfIsBusinessRepresentative()) client().from("business_settlement_accounts")
       .select("business_id,bank_name,account_number,account_holder,updated_at")
       .eq("business_id", business.id)
       .maybeSingle()
       .then(({ data, error }) => {
+        if (window.motfCurrentBusiness?.id !== business.id) return;
         if (error) return console.warn("Could not load settlement account.", error);
         window.motfCurrentSettlementAccount = data || null;
         const settlementValues = {
@@ -1155,6 +1159,10 @@
     if (!business || !client()) {
       return originalSaveMypageData?.();
     }
+    if (document.getElementById("motfBusinessPhone")?.dataset.businessId !== business.id) {
+      alert("현재 업장 정보가 아직 준비되지 않았습니다. 새로고침 후 다시 저장해주세요.");
+      return;
+    }
 
     const seasonRanges = window.motfReadSeasonRangesFromDashboard?.() || { shoulder: [], peak: [] };
     const payload = {
@@ -1188,7 +1196,6 @@
       gallery_image_urls: business.gallery_image_urls || [],
       updated_at: new Date().toISOString(),
     };
-    const ownerPhone = document.getElementById("motfOwnerPhone")?.value.trim() || null;
     const settlementPayload = {
       business_id: business.id,
       bank_name: document.getElementById("motfSettlementBank")?.value.trim() || "",
@@ -1243,16 +1250,13 @@
 
       if (saveButton) saveButton.textContent = "저장 중...";
       if (business.approval_status === "approved") {
-        const [reviewResult, profileResult, settlementResult, marketPolicyResult] = await Promise.all([
+        const [reviewResult, settlementResult, marketPolicyResult] = await Promise.all([
           client().rpc("submit_business_listing_review", {
             target_business_id: business.id,
             proposed_business: payload,
             proposed_offerings: offeringItems,
             requested_type: "listing_update",
           }),
-          ownerPhone && window.motfIsBusinessRepresentative()
-            ? client().from("profiles").update({ phone: ownerPhone, updated_at: new Date().toISOString() }).eq("id", window.motfCurrentProfile?.id)
-            : Promise.resolve({ error: null }),
           hasSettlementValue && window.motfHasBusinessPermission("settlements")
             ? client().from("business_settlement_accounts").upsert(settlementPayload, { onConflict: "business_id" })
             : Promise.resolve({ error: null }),
@@ -1260,12 +1264,11 @@
             ? client().from("businesses").update(marketPolicyPayload).eq("id", business.id)
             : Promise.resolve({ error: null }),
         ]);
-        if (reviewResult.error || profileResult.error || settlementResult.error || marketPolicyResult.error) {
-          throw reviewResult.error || profileResult.error || settlementResult.error || marketPolicyResult.error;
+        if (reviewResult.error || settlementResult.error || marketPolicyResult.error) {
+          throw reviewResult.error || settlementResult.error || marketPolicyResult.error;
         }
         if (hasSettlementValue && window.motfHasBusinessPermission("settlements")) window.motfCurrentSettlementAccount = settlementPayload;
         if (marketPolicyPayload) window.motfCurrentBusiness = { ...window.motfCurrentBusiness, ...marketPolicyPayload };
-        if (window.motfCurrentProfile && ownerPhone) window.motfCurrentProfile.phone = ownerPhone;
         alert("변경 승인 요청을 보냈습니다. 운영팀 승인 전까지 현재 공개 정보가 유지됩니다.");
         await window.motfUpdateListingReviewUi?.();
         return;
@@ -1276,14 +1279,11 @@
         .select(businessSelect)
         .single();
       if (businessResult.error) throw businessResult.error;
-      const [offeringResult, profileResult, settlementResult, marketPolicyResult] = await Promise.all([
+      const [offeringResult, settlementResult, marketPolicyResult] = await Promise.all([
         offeringItems.length ? client().rpc("save_business_offerings", {
           target_business_id: business.id,
           items: offeringItems,
         }) : Promise.resolve({ error: null }),
-        ownerPhone && window.motfIsBusinessRepresentative()
-          ? client().from("profiles").update({ phone: ownerPhone, updated_at: new Date().toISOString() }).eq("id", window.motfCurrentProfile?.id)
-          : Promise.resolve({ error: null }),
         hasSettlementValue && window.motfHasBusinessPermission("settlements")
           ? client().from("business_settlement_accounts").upsert(settlementPayload, { onConflict: "business_id" })
           : Promise.resolve({ error: null }),
@@ -1291,8 +1291,8 @@
           ? client().from("businesses").update(marketPolicyPayload).eq("id", business.id)
           : Promise.resolve({ error: null }),
       ]);
-      if (offeringResult.error || profileResult.error || settlementResult.error || marketPolicyResult.error) {
-        throw offeringResult.error || profileResult.error || settlementResult.error || marketPolicyResult.error;
+      if (offeringResult.error || settlementResult.error || marketPolicyResult.error) {
+        throw offeringResult.error || settlementResult.error || marketPolicyResult.error;
       }
       await Promise.all([
         client().rpc("refresh_business_nearby_distances", { target_business_id: business.id }),
@@ -1304,7 +1304,6 @@
       const data = refreshed.data;
       window.motfCurrentBusiness = data;
       if (hasSettlementValue && window.motfHasBusinessPermission("settlements")) window.motfCurrentSettlementAccount = settlementPayload;
-      if (window.motfCurrentProfile && ownerPhone) window.motfCurrentProfile.phone = ownerPhone;
       window.motfApplyBusinessToDashboard?.(data);
       window.motfSetPartnerOnboarding?.(false);
       alert("비공개 초안을 저장했습니다. 점검을 마치면 아래 등록 신청 버튼을 눌러주세요.");
