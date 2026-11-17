@@ -3,6 +3,7 @@
   const client = () => window.motfSupabase;
   const escapeHtml = (value) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
   const money = (value) => `${Number(value || 0).toLocaleString("ko-KR")}원`;
+  const processing = new Set();
 
   function missingItems(business, offerings) {
     const missing = [];
@@ -106,7 +107,12 @@
     if (filter !== "all") query = query.eq("status", filter);
     const { data: requests, error } = await query;
     if (error) { area.innerHTML = `<div class="admin-control-empty">${escapeHtml(error.message)}</div>`; return; }
-    const businessIds = [...new Set((requests || []).map((item) => item.business_id))];
+    const draftResult = ['pending','all'].includes(filter)
+      ? await client().from('businesses').select('*').eq('approval_status','pending').order('created_at',{ascending:false})
+      : {data:[],error:null};
+    const pendingBusinesses = new Set((requests || []).filter(item=>item.status==='pending').map(item=>item.business_id));
+    const drafts = (draftResult.data || []).filter(item=>!pendingBusinesses.has(item.id));
+    const businessIds = [...new Set([...(requests || []).map((item) => item.business_id),...drafts.map(item=>item.id)])];
     const [{ data: businesses }, { data: currentOfferings }] = businessIds.length
       ? await Promise.all([
         client().from("businesses").select("*").in("id", businessIds),
@@ -138,18 +144,35 @@
       const actions = card.querySelector(".listing-review-card-actions");
       (actions || card).insertAdjacentHTML(actions ? "beforebegin" : "beforeend", fullRequestDetail(request, byId.get(request.business_id)));
     });
+    if(drafts.length){
+      if(!requests?.length)area.replaceChildren();
+      area.insertAdjacentHTML('beforeend','<h3 class="listing-review-draft-heading">가입 완료 · 등록 신청 전</h3>');
+      drafts.forEach(business=>{
+        const rooms=offeringsByBusiness.get(business.id)||[];
+        const detail={request_type:'new_listing',proposed_business:business,proposed_offerings:rooms};
+        area.insertAdjacentHTML('beforeend',`<article class="listing-review-card" data-listing-draft="${escapeHtml(business.id)}"><div class="listing-review-card-head"><div><span class="listing-review-type">등록 준비</span><h3>${escapeHtml(business.business_name||'업장명 미입력')}</h3><p>${escapeHtml(business.business_type==='market'?'장보기':'숙소')} · ${rooms.length}개 ${business.business_type==='market'?'상품':'객실'}</p></div><span class="listing-review-status">신청 전</span></div><p>사장님 가입은 완료되었습니다. 업장 정보를 저장하고 ‘등록 신청’을 보내면 이 목록에서 승인·반려할 수 있습니다.</p>${fullRequestDetail(detail,business)}</article>`);
+      });
+    }
+    if(draftResult.error)area.insertAdjacentHTML('beforeend',`<p role="status">가입 완료 업장을 불러오지 못했습니다: ${escapeHtml(draftResult.error.message)}</p>`);
     window.lucide?.createIcons();
   };
 
   window.motfReviewListing = async function reviewListing(requestId, decision) {
+    if(processing.has(requestId))return;
     const note = decision === "rejected" ? prompt("사장님에게 보여줄 반려 사유를 입력해주세요.") : null;
     if (decision === "rejected" && !note?.trim()) return;
     if (!confirm(decision === "approved" ? "이 신청 내용을 승인하고 이용자 화면에 반영할까요?" : "이 신청을 반려할까요?")) return;
-    const { error } = await client().rpc("review_business_listing_request", {
-      target_request_id: requestId, decision, note: note?.trim() || null,
-    });
-    if (error) return alert(error.message);
-    alert(decision === "approved" ? "승인되어 공개 정보에 반영되었습니다." : "반려 처리했습니다.");
-    await Promise.all([window.motfLoadListingReviews(), window.loadMotfAdminDirectory?.()]);
+    processing.add(requestId);
+    const buttons=[...document.querySelectorAll('.listing-review-card-actions button')].filter(button=>button.getAttribute('onclick')?.includes(requestId));
+    buttons.forEach(button=>button.disabled=true);
+    try {
+      const { error } = await client().rpc("review_business_listing_request", {
+        target_request_id: requestId, decision, note: note?.trim() || null,
+      });
+      if (error) throw error;
+      alert(decision === "approved" ? "승인되어 공개 정보에 반영되었습니다." : "반려 처리했습니다.");
+      await Promise.all([window.motfLoadListingReviews(), window.loadMotfAdminDirectory?.()]);
+    } catch(error){alert(error.message||'심사 결과를 저장하지 못했습니다.');}
+    finally{processing.delete(requestId);buttons.forEach(button=>button.disabled=false);}
   };
 })();

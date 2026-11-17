@@ -1137,6 +1137,7 @@
         return;
       }
 
+      if (window.motfCurrentBusiness?.id !== business.id) return;
       const offerings = result.data || [];
       window.motfApplyOfferingsToDashboard?.(offerings);
       updatePhotoPreview();

@@ -5,13 +5,14 @@
   let offerings = [];
   let availabilityBlocks = [];
   let conversations = [];
+  let demoReservations = [];
   let lastLoadedAt = 0;
   let loadingPromise = null;
   let realtimeTimer = 0;
   let workspaceVersion = 0;
   window.addEventListener('motf:owner-workspace-clear', () => {
     workspaceVersion += 1;
-    reviews = []; settlements = []; transactions = []; offerings = []; availabilityBlocks = []; conversations = [];
+    reviews = []; settlements = []; transactions = []; offerings = []; availabilityBlocks = []; conversations = []; demoReservations = [];
     lastLoadedAt = 0;
     loadingPromise = null;
     window.clearTimeout(realtimeTimer);
@@ -265,6 +266,7 @@
     const isMarket = business.business_type === "market";
     const today = new Date().toISOString().slice(0, 10);
     const pending = transactions.filter((item) => item.status === "pending");
+    const pendingDemos = demoReservations.filter((item) => item.business_id === business.id && item.status === 'pending');
     const upcoming = transactions.filter((item) => item.status === "confirmed" && String(item.activityDate || "").slice(0, 10) >= today);
     const recentChats = conversations.filter((item) => Date.now() - new Date(item.last_message_at).getTime() < 24 * 60 * 60 * 1000);
     const visibleReviews = reviews.filter((review) => !review.is_hidden);
@@ -273,7 +275,7 @@
 
     $("#ownerOperationsGreeting").textContent = `${business.business_name} 운영 현황입니다. 중요한 항목부터 확인하세요.`;
     $("#ownerOperationsStats").innerHTML = [
-      statCard(isMarket ? "승인 대기 주문" : "확정 대기", `${pending.length}건`, "승인 또는 거절 필요", pending.length ? "is-warning" : ""),
+      statCard(isMarket ? "승인 대기 주문" : "확정 대기", `${pending.length + pendingDemos.length}건`, pendingDemos.length ? `실제 ${pending.length}건 · 시연 ${pendingDemos.length}건` : "승인 또는 거절 필요", pending.length + pendingDemos.length ? "is-warning" : ""),
       statCard(isMarket ? "다가오는 픽업" : "다가오는 일정", `${upcoming.length}건`, isMarket ? "확정된 주문" : "확정된 예약/주문"),
       statCard("최근 24시간 문의", `${recentChats.length}건`, `전체 채팅 ${conversations.length}개`),
       statCard("이용자 평점", visibleReviews.length ? `${average.toFixed(1)} / 5` : "리뷰 없음", `${visibleReviews.length}개 리뷰`),
@@ -304,6 +306,8 @@
       </article>`;
     }).join("");
 
+    const demoCards = pendingDemos.slice(0,5).map(item => `<article class="owner-urgent-card" data-urgent-demo-id="${escapeHtml(item.id)}"><div class="owner-urgent-main"><span class="owner-urgent-badge">시연 · 승인 필요</span><strong>${escapeHtml(item.customer_name)}</strong><small>${escapeHtml(item.check_in)} ~ ${escapeHtml(item.check_out)} · ${escapeHtml(item.offering_name)} · ${money(item.total_amount)}</small><small>실제 결제·방막기·매출에 반영되지 않는 테스트 예약입니다.</small></div><div class="owner-urgent-actions"><button class="primary-btn" type="button" data-demo-decision="confirmed" data-demo-id="${escapeHtml(item.id)}">테스트 승인</button><button class="motf-reject-action-btn" type="button" data-demo-decision="rejected" data-demo-id="${escapeHtml(item.id)}">테스트 거절</button></div></article>`).join('');
+    const urgentCards = pendingCards + demoCards;
     const tasks = [];
     if (pending.length) tasks.push({ icon: "clipboard-check", title: `${isMarket ? "승인 대기 주문" : "확정 대기"} ${pending.length}건`, body: isMarket ? "상품 구성과 픽업 가능 여부를 확인한 뒤 승인 또는 거절해주세요." : "일정과 객실을 확인한 뒤 승인 또는 거절해주세요.", panel: "orders", action: isMarket ? "주문 확인" : "예약 확인" });
     if (recentChats.length) tasks.push({ icon: "message-circle", title: `최근 문의 ${recentChats.length}건`, body: "답변을 기다리는 이용자가 있는지 확인해주세요.", panel: "chat", action: "채팅 열기" });
@@ -312,8 +316,8 @@
     const lowReviews = visibleReviews.filter((review) => rating5(review.rating) <= 3);
     if (lowReviews.length) tasks.push({ icon: "message-square-warning", title: `확인이 필요한 리뷰 ${lowReviews.length}건`, body: "3점 이하 후기를 살펴보고 운영 개선에 반영해보세요.", panel: "reviews", action: "리뷰 보기" });
     const taskLinks = tasks.filter((task) => task.panel !== "orders" && window.motfCanOpenOwnerPanel(task.panel)).map((task) => `<button type="button" class="owner-task-row" onclick="switchPanel('${task.panel}')"><i data-lucide="${task.icon}"></i><span><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(task.body)}</small></span><b>${escapeHtml(task.action)} <i data-lucide="chevron-right"></i></b></button>`).join("");
-    $("#ownerOperationsTasks").innerHTML = pendingCards
-      ? `<div class="owner-urgent-list">${pendingCards}</div>${taskLinks ? `<div class="owner-secondary-task-list">${taskLinks}</div>` : ""}`
+    $("#ownerOperationsTasks").innerHTML = urgentCards
+      ? `<div class="owner-urgent-list">${urgentCards}</div>${taskLinks ? `<div class="owner-secondary-task-list">${taskLinks}</div>` : ""}`
       : `<div class="owner-all-clear"><i data-lucide="circle-check-big"></i><div><strong>지금 바로 승인할 예약은 없습니다.</strong><p>새로운 예약 요청이 들어오면 이곳에 먼저 표시됩니다.</p></div></div>${taskLinks ? `<div class="owner-secondary-task-list">${taskLinks}</div>` : ""}`;
 
     const settlement = window.motfCurrentSettlementAccount || {};
@@ -338,6 +342,12 @@
     window.lucide?.createIcons();
     window.motfApplyWorkspacePermissions?.();
   }
+
+  window.addEventListener('motf:reservation-demos', event => {
+    const business = window.motfCurrentBusiness;
+    demoReservations = business && can('reservations') && event.detail?.businessId === business.id ? event.detail.rows || [] : [];
+    if (business && window.motfPortalActive && window.motfCurrentProfile?.role !== 'admin') renderOperations();
+  });
 
   window.motfRefreshPartnerOperations = async function refreshPartnerOperations(force = false) {
     const version = workspaceVersion;
