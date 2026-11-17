@@ -2681,20 +2681,27 @@
   window.loadMotfAdminSupportCases = async function loadMotfAdminSupportCases() {
     if (!client() || window.motfCurrentProfile?.role !== "admin") return;
     const { data, error } = await client().from("support_cases")
-      .select("id, case_type, title, body, status, created_at, reporter:profiles!support_cases_reporter_id_fkey(full_name, email), businesses(business_name)")
+      .select("id, case_type, title, body, status, admin_note, created_at, contact_source, contact_details, reporter:profiles!support_cases_reporter_id_fkey(full_name, email), businesses(business_name)")
       .order("created_at", { ascending: false });
-    if (error) return console.error(error);
+    if (error) {
+      const status = document.getElementById('adminContactStatus');
+      if (status) status.textContent = '문의 목록을 불러오지 못했습니다. SQL 102 적용 여부와 연결을 확인해주세요.';
+      return console.error(error);
+    }
     const typeText = { inquiry: "문의", dispute: "분쟁" };
     const statusText = { received: "접수", processing: "처리 중", resolved: "완료" };
     masterExtendedData.cases = (data || []).map((item) => ({
       id: item.id,
-      type: typeText[item.case_type] || item.case_type,
-      reporter: escapeHtml(item.reporter?.full_name || item.reporter?.email || "이용자"),
+      type: ({partner:'입점 문의',feedback:'건의사항'})[item.contact_source] || typeText[item.case_type] || item.case_type,
+      reporter: escapeHtml(item.contact_details?.contactName || item.reporter?.full_name || item.reporter?.email || (item.contact_source ? "비회원 접수" : "이용자")),
       partner: escapeHtml(item.businesses?.business_name || "플랫폼 문의"),
       title: escapeHtml(item.title),
       detail: escapeHtml(item.body),
       date: new Date(item.created_at).toLocaleDateString("ko-KR"),
       status: statusText[item.status] || item.status,
+      contact: item.contact_details || {},
+      note: item.admin_note || '',
+      createdAt: item.created_at,
     }));
     window.renderMasterCases();
   };

@@ -1138,7 +1138,7 @@
                 <div id="motfNearbyTagChoices" class="owner-choice-grid"></div>
               </div>
               <div class="motf-field-wide owner-fee-section">
-                <div class="owner-section-row"><div><strong>기타 특이 추가요금</strong><p>시설 항목에 없는 예외 요금만 등록해주세요.</p></div><button type="button" class="secondary-btn compact" onclick="motfAddExtraFeeRow()"><i data-lucide="plus"></i>요금 추가</button></div>
+                <div class="owner-section-row"><div><strong>기타 특이 추가요금</strong><p>시설 항목에 없는 예외 요금만 등록해주세요. 추가금은 현장에서 확인 후 숙소 현장에서 직접 받으며, 사이트 결제금액에는 포함되지 않습니다.</p></div><button type="button" class="secondary-btn compact" onclick="motfAddExtraFeeRow()"><i data-lucide="plus"></i>요금 추가</button></div>
                 <div id="motfExtraFeeRows" class="owner-fee-rows"></div>
               </div>
             </div>
@@ -1303,7 +1303,7 @@
       </section>
 
       <section id="panel-master-cases" class="panel">
-        <h2 class="panel-title">플랫폼 문의 및 분쟁 관리</h2>
+        <h2 class="panel-title">입점·건의·문의 및 분쟁 관리</h2>
         <div class="admin-filter-row">
           <select id="masterCaseTypeFilter" onchange="renderMasterCases()"><option value="all">전체 유형</option><option value="문의">일반 문의</option><option value="분쟁">이용자·사장님 분쟁</option></select>
           <select id="masterCaseStatusFilter" onchange="renderMasterCases()"><option value="all">전체 상태</option><option value="접수">접수</option><option value="처리 중">처리 중</option><option value="완료">완료</option></select>
@@ -1698,7 +1698,7 @@
           <li><button class="menu-item" id="m-btn-products" onclick="switchMasterPanel('master-products')"><i data-lucide="package-check"></i> 상품 심사·변경 알림 <span id="marketProductAdminBadge" class="market-workflow-badge" hidden></span></button></li>
           <li><button class="menu-item" id="m-btn-locations" onclick="switchMasterPanel('master-locations')"><i data-lucide="map-pin"></i> 주변 기준 장소</button></li>
           <li><button class="menu-item" id="m-btn-chat-monitor" onclick="switchMasterPanel('master-chat-monitor')"><i data-lucide="messages-square"></i> 전체 채팅 모니터링</button></li>
-          <li><button class="menu-item" id="m-btn-cases" onclick="switchMasterPanel('master-cases')"><i data-lucide="badge-help"></i> 문의 & 분쟁 관리</button></li>
+          <li><button class="menu-item" id="m-btn-cases" onclick="switchMasterPanel('master-cases')"><i data-lucide="badge-help"></i> 입점·건의·문의 관리</button></li>
           <li><button class="menu-item" id="m-btn-orders" onclick="switchMasterPanel('master-orders')"><i data-lucide="calendar-check"></i> 예약 관리</button></li>
           <li><button class="menu-item" id="m-btn-content" onclick="switchMasterPanel('master-content')"><i data-lucide="shield-check"></i> 리뷰 & 커뮤니티</button></li>
           <li><button class="menu-item" id="m-btn-revenue" onclick="switchMasterPanel('master-revenue')"><i data-lucide="trending-up"></i> 본사 매출 분석</button></li>
@@ -2545,7 +2545,7 @@
     function addTableRow() {
       const data = mockData[currentOwnerType];
       if (currentOwnerType === 'stay') {
-        data.rooms.push({ name: `신규 객실 ${data.rooms.length + 1}`, price: 15000, base_people: null, max_people: null, extra_person_fee: 0, image_urls: [], feature_summary: [], offseason_weekday_price: 15000, offseason_weekend_price: 15000, shoulder_weekday_price: 15000, shoulder_weekend_price: 15000, peak_weekday_price: 15000, peak_weekend_price: 15000, bathroom_count: 0, bathroom_gender_separated: false, bathroom_note: '' });
+        data.rooms.push({ id: crypto.randomUUID(), name: `신규 객실 ${data.rooms.length + 1}`, price: 15000, base_people: null, max_people: null, extra_person_fee: 0, image_urls: [], feature_summary: [], offseason_weekday_price: 15000, offseason_weekend_price: 15000, shoulder_weekday_price: 15000, shoulder_weekend_price: 15000, peak_weekday_price: 15000, peak_weekend_price: 15000, bathroom_count: 0, bathroom_gender_separated: false, bathroom_note: '' });
       } else {
         data.rooms.push({ name: `신규 상품 ${data.rooms.length + 1}`, price: 0, unit: '', category: '식재료', stock_quantity: null, origin: '', description: '', is_alcohol: false, image_urls: [], feature_summary: [], amenity_details: [], detail_sections: {}, nutrition_info: {} });
       }
@@ -3300,7 +3300,7 @@
       };
       window.motfApplyOfferingsToDashboard = function(offerings) {
         if (currentOwnerType === 'admin' || !Array.isArray(offerings)) return;
-        mockData[currentOwnerType].rooms = offerings.map(item => ({
+        mockData[currentOwnerType].rooms = offerings.filter(item => !item.retired_at).map(item => ({
           id: item.id,
           is_active: item.is_active !== false,
           name: item.name,
@@ -3339,7 +3339,7 @@
       window.motfReadOfferingsFromDashboard = function() {
         if (currentOwnerType === 'admin') return [];
         return mockData[currentOwnerType].rooms.map((item, index) => ({
-          id: item.id || null,
+          id: item.id || (item.id = crypto.randomUUID()),
           is_active: item.is_active !== false,
           name: item.name,
           price: Number(item.price) || 0,
@@ -3674,9 +3674,12 @@
     })();
   </script>
   <link rel="stylesheet" href="/owner/pc-1023.css?v=20261023-v1">
-  <script src="/owner/owner-data.js?v=20261116-signup-chat"></script>
+  <script src="/owner/owner-data.js?v=20261117-onsite-final"></script>
+  <script src="/owner/admin-contact-inbox.js?v=20261117"></script>
+  <link rel="stylesheet" href="/owner/admin-contact-inbox.css?v=20261117" />
   <link rel="stylesheet" href="/owner/chat-meta.css?v=20261116-signup-chat">
-  <script src="/owner/owner-identity.js?v=20261116-signup-fix"></script>
+  <script src="/owner/identity-flow.js?v=20261117-auth-rooms"></script>
+  <script src="/owner/owner-identity.js?v=20261117-auth-rooms"></script>
   <script src="/owner/owner-legal.js?v=20261116-signup-fix"></script>
   <link rel="stylesheet" href="/owner/owner-legal.css?v=20261116-signup-fix">
   <link rel="stylesheet" href="/owner/admin-home-banners.css?v=20261103">
@@ -3685,7 +3688,7 @@
   <script src="/owner/admin-product-reviews.js?v=20261108"></script>
   <script src="/owner/admin-control.js?v=20261108"></script>
   <script src="/owner/stay-import.js?v=20260907-review1"></script>
-  <script src="/owner/listing-review.js?v=20261116-workflow"></script>
+  <script src="/owner/listing-review.js?v=20261117-auth-rooms"></script>
   <script src="/owner/owner-revenue.js?v=20261116-reset"></script>
   <script src="/owner/admin-review-fixes.js?v=20260902-admin-loop1"></script>
   <script src="/owner/admin-organization-handoff.js?v=20261014-workspace80"></script>
@@ -3693,6 +3696,8 @@
   <script src="/owner/admin-pc-1023.js?v=20261023-v1"></script>
   <script src="/owner/market-pc-1023.js?v=20261116-workflow"></script>
   <script src="/owner/market-inventory.js?v=20261116-workflow"></script>
+  <script src="/owner/market-home-products.js?v=20261117"></script>
+  <link rel="stylesheet" href="/owner/market-home-products.css?v=20261117">
   <link rel="stylesheet" href="/owner/market-inventory.css?v=20261116-workflow">
   <link rel="stylesheet" href="/owner/region-management.css?v=20261113">
   <script src="/owner/region-management.js?v=20261113"></script>

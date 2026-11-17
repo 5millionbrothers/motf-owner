@@ -22,7 +22,11 @@
     try {
       const response = await fetch(`${API_BASE}${path}`, { method:"POST", headers:{ "Content-Type":"application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body:JSON.stringify(body), signal:controller.signal });
       const result = await response.json().catch(() => null);
-      if (!response.ok || !result?.ok) throw new Error(result?.message || "요청을 처리하지 못했습니다.");
+      if (!response.ok || !result?.ok) {
+        const error = new Error(result?.message || "요청을 처리하지 못했습니다.");
+        error.status = response.status;
+        throw error;
+      }
       return result;
     } catch (error) {
       if (error.name === 'AbortError') throw new Error('응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.');
@@ -48,26 +52,11 @@
       form = document.createElement('form');form.method='POST';form.action=start.callUrl;form.target=popupName;
       Object.entries(start.form).forEach(([name,value])=>{const input=document.createElement('input');input.type='hidden';input.name=name;input.value=value;form.appendChild(input);});
       document.body.appendChild(form);
-      return await new Promise((resolve,reject)=>{
-        let finished=false,closeTimer;
-        const timer=setTimeout(()=>finish(new Error('인증 시간이 만료되었습니다. 다시 시도해주세요.')),600000);
-        function cleanup(){clearTimeout(timer);clearInterval(closeTimer);removeEventListener('message',listener);}
-        function finish(error,result){if(finished)return;finished=true;cleanup();if(error)reject(error);else resolve(result);}
-        const listener=async event=>{
-          if(event.origin!==API_BASE || event.source!==popup || event.data?.type!=='motf:kcp-identity' || finished)return;
-          // Only the server-verified status may complete signup, never popup data alone.
-          finished=true;cleanup();
-          if(event.data.ok!==true)return reject(new Error(event.data.message||'본인인증에 실패했습니다.'));
-          try{
-            const result=await api('/api/identity-status',{identityToken:start.identityToken,purpose});
-            if(!result.verified || !result.person?.name || !result.person?.phone || !result.person?.birthDate)throw new Error('인증 결과를 확인하지 못했습니다. 다시 인증해주세요.');
-            resolve({token:start.identityToken,person:result.person});
-          }catch(error){reject(error);}
-        };
-        addEventListener('message',listener);
-        closeTimer=setInterval(()=>{if(popup.closed)finish(new Error('본인인증 창이 닫혔습니다. 인증이 완료되지 않았다면 다시 시도해주세요.'));},1000);
-        try{form.submit();}catch(error){finish(error);}
+      const status = await window.MotfIdentityFlow.waitForResult({
+        popup, origin: API_BASE, submit: () => form.submit(),
+        getStatus: () => api('/api/identity-status', { identityToken: start.identityToken, purpose }),
       });
+      return { token: start.identityToken, person: status.person };
     } finally { form?.remove();popup.close();verificationInProgress=false; }
   }
 

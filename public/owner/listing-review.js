@@ -110,7 +110,7 @@
     const [{ data: businesses }, { data: currentOfferings }] = businessIds.length
       ? await Promise.all([
         client().from("businesses").select("*").in("id", businessIds),
-        client().from("offerings").select("*").in("business_id", businessIds).order("sort_order"),
+        client().from("offerings").select("*").in("business_id", businessIds).is("retired_at",null).order("sort_order"),
       ])
       : [{ data: [] }, { data: [] }];
     const byId = new Map((businesses || []).map((item) => [item.id, item]));
