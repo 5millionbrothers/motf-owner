@@ -3568,7 +3568,7 @@
         try {
           const response = await fetch('https://motf.co.kr/api/account-login', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ identifier: inputId, password })
+            body: JSON.stringify({ accountType: 'partner', identifier: inputId, password })
           });
           const result = await response.json();
           if (!response.ok || !result.ok) throw new Error(result.message || '로그인하지 못했습니다.');
@@ -3679,7 +3679,7 @@
   <link rel="stylesheet" href="/owner/admin-contact-inbox.css?v=20261117" />
   <link rel="stylesheet" href="/owner/chat-meta.css?v=20261116-signup-chat">
   <script src="/owner/identity-flow.js?v=20261117-auth-rooms"></script>
-  <script src="/owner/owner-identity.js?v=20261117-auth-rooms"></script>
+  <script src="/owner/owner-identity.js?v=20261117-account-sites"></script>
   <script src="/owner/owner-legal.js?v=20261116-signup-fix"></script>
   <link rel="stylesheet" href="/owner/owner-legal.css?v=20261116-signup-fix">
   <link rel="stylesheet" href="/owner/admin-home-banners.css?v=20261103">
@@ -3704,5 +3704,7 @@
   <link rel="stylesheet" href="/owner/desktop-replies.css?v=20261116">
   <link rel="stylesheet" href="/owner/launch.css?v=20261116-reset">
   <script src="/owner/desktop-replies.js?v=20261116"></script>
+  <link rel="stylesheet" href="/owner/reservation-demo.css?v=20261117-demo1">
+  <script src="/owner/reservation-demo.js?v=20261117-demo1"></script>
 </body>
 </html>

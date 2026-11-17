@@ -136,7 +136,7 @@
     if(!passwordIsValid(password)) return alert("비밀번호는 영문·숫자·특수문자를 포함한 8~12자리여야 합니다.");
     if(password!==document.getElementById("ownerResetPasswordConfirm").value) return alert("비밀번호 확인이 일치하지 않습니다.");
     try {
-      await api("/api/identity-password-reset",{ identifier:document.getElementById("ownerResetEmail").value.trim(),password,identityToken:resetIdentity.token });
+      await api("/api/identity-password-reset",{ accountType:'partner',identifier:document.getElementById("ownerResetEmail").value.trim(),password,identityToken:resetIdentity.token });
       closeOwnerPasswordReset(); event.target.reset(); resetIdentity=null; alert("비밀번호가 변경되었습니다.");
     } catch(error){ alert(error.message||"비밀번호를 변경하지 못했습니다."); }
   };
