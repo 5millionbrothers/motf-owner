@@ -2,15 +2,19 @@
   const $=selector=>document.querySelector(selector),client=()=>window.motfSupabase;
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const statuses={pending:'예약 요청 대기',confirmed:'예약 승인',rejected:'예약 거절'};
-  const deliveryLabels={queued:'발송 대기',sending:'발송 중',sent:'발송 접수',mock_sent:'모의 발송 · 실제 수신 안 됨',failed:'발송 실패',cancelled:'발송 취소'};
-  let businesses=[],contacts=[],rooms=[],rows=[],deliveries=[],key=crypto.randomUUID(),busy=false,refreshing=false,displayedBusiness=null,linked=false;
+  const deliveryLabels={queued:'발송 대기',processing:'발송 처리 중',sent:'알리고 접수 · 휴대폰 수신 확인 전',mock_sent:'모의 발송 · 실제 수신 안 됨',failed:'실패 또는 수신 결과 확인 필요',skipped:'발송 보류',cancelled:'발송 취소'};
+  let businesses=[],contacts=[],rooms=[],rows=[],deliveries=[],key=crypto.randomUUID(),fingerprint='',busy=false,refreshing=false,displayedBusiness=null,linked=false;
   const date=offset=>{const d=new Date();d.setDate(d.getDate()+offset);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
-  async function call(name,args){const {data,error}=await client().rpc(name,args);if(error)throw Error(error.message);return data;}
+  async function call(name,args){
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+    try{const {data,error}=await client().rpc(name,args).abortSignal(controller.signal);if(error)throw Error(controller.signal.aborted?'응답 시간이 초과됐습니다. 예약 목록을 확인한 뒤 같은 요청으로 다시 시도해주세요.':error.message);return data;}
+    finally{clearTimeout(timer);}
+  }
   function report(message){const node=$('#reservationDemoStatus');if(node)node.textContent=message;}
   function publish(businessId,data=[]){window.motfReservationDemoRows=data;window.dispatchEvent(new CustomEvent('motf:reservation-demos',{detail:{businessId,rows:data}}));if(businessId&&window.motfCurrentProfile?.role!=='admin')window.renderCalendar?.();}
   function card(row,admin=false){
     const business=businesses.find(item=>item.id===row.business_id)?.business_name;
-    const notices=deliveries.filter(item=>item.demo_id===row.id).map(item=>`<li>${esc(({owner:'사장님',user:'시연 이용자',admin:'운영자'})[item.recipient_role])} · ${esc(deliveryLabels[item.status]||item.status)}${item.last_error?' · '+esc(item.last_error):''}</li>`).join('');
+    const notices=deliveries.filter(item=>item.demo_id===row.id).map(item=>`<li>${esc(({owner:'사장님',user:'시연 이용자',admin:'운영자'})[item.recipient_role])}${item.actual_last4?' · 수신번호 끝 '+esc(item.actual_last4):''} · ${esc(deliveryLabels[item.status]||item.status)}${item.last_error?' · '+esc(item.last_error):''}${item.test_mode==='Y'?' · 알리고 테스트 모드(실제 미발송)':''}</li>`).join('');
     return `<article class="reservation-demo-card" data-reservation-demo-id="${row.id}">
       <header><span class="reservation-demo-badge">시연 · ${esc(statuses[row.status]||row.status)}</span><time>${esc(new Date(row.created_at).toLocaleString('ko-KR',{hour12:false}))}</time></header>
       <h3>${esc(row.customer_name)}${admin&&business?' · '+esc(business):''}</h3>
@@ -65,17 +69,26 @@
   async function create(all){
     if(busy||window.motfCurrentProfile?.role!=='admin')return;
     const form=$('#reservationDemoForm');if(!form.reportValidity())return;
-    const targets=all?businesses.filter(item=>rooms.some(room=>room.business_id===item.id)).map(item=>item.id):[$('#reservationDemoBusiness').value];
+    const targets=all?businesses.filter(item=>rooms.some(room=>room.business_id===item.id)&&contacts.some(contact=>contact.business_id===item.id&&contact.notification_phone)).map(item=>item.id):[$('#reservationDemoBusiness').value];
     if(!targets.length||!targets[0])return report('테스트할 공개 숙소와 객실을 선택해주세요.');
     const selected=targets.map(id=>contacts.find(item=>item.business_id===id));
     if(selected.some(item=>!item?.notification_phone))return report('사장님 수신번호가 확인되지 않은 숙소가 있습니다. 가입 회원 & 업장 관리 → 알림 수신번호 점검·확정에서 먼저 확인해주세요.');
     const recipients=selected.map(item=>`${item.business_name} 사장님 → ${item.notification_phone}`).join('\n');
     if(!confirm(`${recipients}\n시연 이용자 → ${form.elements.phone.value}\n운영자 → ${window.motfCurrentProfile?.phone||'미등록(운영자 알림 미발송)'}\n\n각 역할의 수신자가 맞나요? 실제 알림톡이 발송되며 실제 결제는 발생하지 않습니다.`))return;
-    busy=true;form.querySelectorAll('button').forEach(button=>button.disabled=true);report('테스트 예약을 보내는 중입니다.');
+    const input={target_offering_id:all?null:$('#reservationDemoRoom').value||null,demo_check_in:form.elements.checkIn.value,demo_check_out:form.elements.checkOut.value,demo_guests:Number(form.elements.guests.value),demo_customer:form.elements.customer.value.trim(),demo_phone:form.elements.phone.value,demo_memo:form.elements.memo.value.trim()};
+    const nextFingerprint=JSON.stringify({targets,input});if(fingerprint&&fingerprint!==nextFingerprint)key=crypto.randomUUID();fingerprint=nextFingerprint;
+    const controls=[...form.querySelectorAll('button,input,select,textarea')],disabled=controls.map(node=>node.disabled);
+    busy=true;controls.forEach(node=>node.disabled=true);report('테스트 예약을 보내는 중입니다.');
     try{
-      await call('create_admin_reservation_demo',{target_business_ids:targets,target_offering_id:all?null:$('#reservationDemoRoom').value||null,demo_check_in:form.elements.checkIn.value,demo_check_out:form.elements.checkOut.value,demo_guests:Number(form.elements.guests.value),demo_customer:form.elements.customer.value.trim(),demo_phone:form.elements.phone.value,demo_memo:form.elements.memo.value.trim(),submission_key:key});
-      key=crypto.randomUUID();report(`${targets.length}개 숙소에 테스트 예약을 보냈습니다. 알림톡 발송 상태와 사장님 운영홈을 확인해주세요.`);await refresh();
-    }catch(error){report(error.message);}finally{busy=false;form.querySelectorAll('button').forEach(button=>button.disabled=false);}
+      const failures=[];let completed=0;
+      for(const id of targets){
+        report(`${completed+1}/${targets.length} · ${businesses.find(item=>item.id===id)?.business_name||'숙소'}에 예약 요청 중`);
+        try{await call('create_admin_reservation_demo',{target_business_ids:[id],...input,submission_key:key});completed++;}
+        catch(error){failures.push(`${businesses.find(item=>item.id===id)?.business_name}: ${error.message}`);}
+      }
+      if(!failures.length)key=crypto.randomUUID();
+      report(`예약 생성 ${completed}/${targets.length}개. 알림톡 접수·실패는 아래 발송 상태에서 별도로 확인해주세요.${failures.length?' '+failures.join(' / '):''}`);await refresh();
+    }catch(error){report(error.message);}finally{busy=false;controls.forEach((node,index)=>node.disabled=disabled[index]);}
   }
   async function refresh(){
     if(refreshing||!client()||document.hidden)return;
@@ -86,9 +99,11 @@
     try{
       let query=client().from('reservation_demos').select('*').is('archived_at',null).gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(100);
       if(!admin)query=query.eq('business_id',business.id);
-      const {data,error}=await query;if(error){if(admin)report(error.message);return;}
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
+      let result;try{result=await query.abortSignal(controller.signal);}finally{clearTimeout(timer);}
+      const {data,error}=result;if(error){if(admin)report('예약 목록을 불러오지 못했습니다. 새로고침으로 다시 확인해주세요.');return;}
       rows=data||[];deliveries=[];
-      if(rows.length){const result=await client().rpc('reservation_demo_deliveries',{target_demo_ids:rows.map(row=>row.id)});deliveries=result.data||[];if(result.error&&admin)report('알림 발송 상태를 읽지 못했습니다. DB 109번 적용 여부를 확인해주세요.');}
+      if(rows.length){try{deliveries=await call('reservation_demo_delivery_audit',{target_demo_ids:rows.map(row=>row.id)})||[];}catch(error){if(admin)report('예약 목록은 불러왔으나 알림 발송 상태를 읽지 못했습니다. DB 113번 적용 후 새로고침해주세요.');}}
       if(admin){if(window.motfCurrentProfile?.role==='admin'&&$('#reservationDemoList'))$('#reservationDemoList').innerHTML=rows.map(row=>card(row,true)).join('')||'<p>진행 중인 테스트 예약이 없습니다.</p>';}
       else if(window.motfCurrentProfile&&window.motfCurrentProfile.role!=='admin'&&window.motfCurrentBusiness?.id===business.id&&window.motfHasBusinessPermission?.('reservations')){
         displayedBusiness=business.id;

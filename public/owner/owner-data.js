@@ -1033,7 +1033,7 @@
     dropzone.addEventListener("drop", (event) => uploadPhotoFiles(event.dataTransfer?.files));
   }
 
-  window.loadMotfPartnerBusiness = function loadMotfPartnerBusiness(business) {
+  window.loadMotfPartnerBusiness = async function loadMotfPartnerBusiness(business) {
     if (!business || !window.motfHasBusinessPermission?.("listing")) return;
     ensurePartnerFields();
     const contactField = document.getElementById("motfBusinessPhone");
@@ -1138,18 +1138,19 @@
 
       if (result.error) {
         console.error("Failed to load offerings", result.error);
-        return;
+        throw new Error('객실·상품 정보를 불러오지 못했습니다. 저장된 로그인은 유지됩니다. 다시 연결해주세요.');
       }
 
       if (window.motfCurrentBusiness?.id !== business.id) return;
       const offerings = result.data || [];
       window.motfApplyOfferingsToDashboard?.(offerings);
+      window.motfOfferingsLoadedBusinessId = business.id;
       updatePhotoPreview();
       const needsOnboarding = !business.region || !business.address || !business.description || !offerings.length;
       window.motfSetPartnerOnboarding?.(needsOnboarding);
       window.motfUpdateListingReviewUi?.();
     };
-    loadOfferings();
+    await loadOfferings();
     window.motfApplyWorkspacePermissions?.();
   };
 
@@ -1158,6 +1159,10 @@
     const business = window.motfCurrentBusiness;
     if (!business || !client()) {
       return originalSaveMypageData?.();
+    }
+    if (window.motfOfferingsLoadedBusinessId !== business.id) {
+      alert('객실·상품 정보를 먼저 불러와야 저장할 수 있습니다. 다시 연결해주세요.');
+      return;
     }
     if (document.getElementById("motfBusinessPhone")?.dataset.businessId !== business.id) {
       alert("현재 업장 정보가 아직 준비되지 않았습니다. 새로고침 후 다시 저장해주세요.");

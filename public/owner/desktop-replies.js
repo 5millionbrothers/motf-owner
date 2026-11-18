@@ -1,6 +1,5 @@
 (() => {
   'use strict';
-  if (!matchMedia('(min-width:1024px)').matches) return;
   const $ = (s, root = document) => root.querySelector(s);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const owner = Boolean($('#chatMessageInput')), input = () => $(owner ? '#chatMessageInput' : '#chatText');
@@ -37,7 +36,7 @@
   }
   bar.addEventListener('click', async event=>{
     const refresh=event.target.closest('[data-replies-refresh]');
-    if(refresh){refresh.disabled=true;try{const reload=owner?window.loadMotfPartnerChats:window.motfReloadChats;await reload?.();}catch{ $('.desktop-reply-feedback',bar).textContent='연결을 확인해주세요.';}finally{refresh.disabled=false;}return;}
+    if(refresh){refresh.disabled=true;try{if(owner)await window.loadMotfPartnerChats?.(window.motfCurrentBusiness);else await window.motfReloadChats?.();}catch{ $('.desktop-reply-feedback',bar).textContent='연결을 확인해주세요.';}finally{refresh.disabled=false;}return;}
     const preset=event.target.closest('[data-reply-preset]'); if(preset)return put(presets[Number(preset.dataset.replyPreset)][1]);
     if (!event.target.closest('[data-replies-manage]')) return;
     editing='';pendingDelete='';rows=[];busy=true;render();dialog.showModal();

@@ -703,7 +703,7 @@
       .motf-location-actions { align-items: flex-start; flex-direction: column; }
     }
   </style>
-  <link rel="stylesheet" href="/owner/owner-data.css?v=20261116-reset">
+  <link rel="stylesheet" href="/owner/owner-data.css?v=20261118-reliability">
   <link rel="stylesheet" href="/owner/stay-import.css?v=20260907-stayimport2">
   <link rel="stylesheet" href="/owner/stay-import-images.css?v=20260907-stayimport5">
   <link rel="stylesheet" href="/owner/listing-review.css?v=20261116-reset">
@@ -3154,6 +3154,7 @@
   </script>
   <script src="/owner/launch.js?v=20261116-workflow"></script>
   <script src="/owner/business-workspaces.js?v=20261116-workflow"></script>
+  <script src="/owner/owner-reliability.js?v=20261118"></script>
   <script>
     /* Supabase 인증 연결층: 원본 화면/스타일은 변경하지 않고 로그인 함수만 교체 */
     (async () => {
@@ -3301,7 +3302,8 @@
       };
       window.motfApplyOfferingsToDashboard = function(offerings) {
         if (currentOwnerType === 'admin' || !Array.isArray(offerings)) return;
-        mockData[currentOwnerType].rooms = offerings.filter(item => !item.retired_at).map(item => ({
+        const visible = window.MotfOwnerReliability.visibleOfferings(offerings, currentOwnerType);
+        mockData[currentOwnerType].rooms = visible.map(item => ({
           id: item.id,
           is_active: item.is_active !== false,
           name: item.name,
@@ -3539,6 +3541,7 @@
         currentOwnerType = business.business_type === 'market' ? 'market' : 'stay';
         applyOwnerTypeEditorLayout();
         window.motfCurrentBusiness = business;
+        window.motfOfferingsLoadedBusinessId = null;
         mockData[currentOwnerType].name = `${business.business_name} 님 홈`;
         mockData[currentOwnerType].displayName = business.business_name;
         mockData[currentOwnerType].desc = business.short_description || business.description?.slice(0, 140) || '';
@@ -3550,7 +3553,7 @@
         initDashboard();
         window.motfRenderBusinessWorkspaces();
         window.motfApplyWorkspacePermissions();
-        window.loadMotfPartnerBusiness?.(business, window.motfCurrentProfile);
+        await window.loadMotfPartnerBusiness?.(business, window.motfCurrentProfile);
         window.loadMotfPartnerTransactions?.(business);
         window.loadMotfPartnerChats?.(business);
         window.motfRefreshPartnerOperations?.(true);
@@ -3577,7 +3580,6 @@
           if (error) throw error;
           await openDashboardForUser(data.user);
         } catch (error) {
-          await supabaseClient.auth.signOut({ scope: 'local' });
           document.getElementById('admin-main').style.display = 'none';
           document.getElementById('login-view').style.display = 'flex';
           window.motfCurrentProfile = null;
@@ -3651,31 +3653,42 @@
         alert('카카오 로그인은 카카오 디벨로퍼스 앱 등록 후 연결됩니다.');
       };
 
-      setTimeout(async () => {
+      async function restoreOwnerDashboard() {
         setLoginRuntimeStatus('저장된 로그인을 확인하고 있습니다.', 'loading');
-        const { data } = await supabaseClient.auth.getSession();
+        const { data, error: sessionError } = await supabaseClient.auth.getSession();
+        if (sessionError) {
+          setLoginRuntimeStatus('로그인 연결을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.', 'error');
+          return;
+        }
         if (data.session?.user) {
           try {
             await openDashboardForUser(data.session.user);
             setLoginRuntimeStatus('자동 로그인되었습니다.', 'ready');
           } catch (error) {
-            await supabaseClient.auth.signOut({ scope: 'local' });
             document.getElementById('admin-main').style.display = 'none';
             document.getElementById('login-view').style.display = 'flex';
             window.motfCurrentProfile = null;
             window.motfCurrentBusiness = null;
             window.motfCurrentSettlementAccount = null;
             setLoginRuntimeStatus(error.message || '업장 정보를 불러오지 못했습니다.', 'error');
+            let retry = document.getElementById('ownerSessionRetry');
+            if (!retry) {
+              retry = document.createElement('button'); retry.id = 'ownerSessionRetry';
+              retry.type = 'button'; retry.className = 'secondary-btn';
+              retry.textContent = '저장된 로그인으로 다시 연결'; loginStatus?.after(retry);
+              retry.onclick = async () => { retry.disabled = true; try { await restoreOwnerDashboard(); } finally { retry.disabled = false; } };
+            }
             console.warn(error.message);
           }
         } else {
           setLoginRuntimeStatus('로그인 준비가 완료되었습니다.', 'ready');
         }
-      }, 0);
+      }
+      setTimeout(() => { void restoreOwnerDashboard().catch(error => setLoginRuntimeStatus(error.message, 'error')); }, 0);
     })();
   </script>
   <link rel="stylesheet" href="/owner/pc-1023.css?v=20261023-v1">
-  <script src="/owner/owner-data.js?v=20261117-contact-safety"></script>
+  <script src="/owner/owner-data.js?v=20261118-reliability"></script>
   <script src="/owner/notification-contacts.js?v=20261117-contact-safety"></script>
   <link rel="stylesheet" href="/owner/notification-contacts.css?v=20261117-contact-safety">
   <script src="/owner/admin-contact-inbox.js?v=20261117"></script>
@@ -3704,10 +3717,10 @@
   <link rel="stylesheet" href="/owner/market-inventory.css?v=20261116-workflow">
   <link rel="stylesheet" href="/owner/region-management.css?v=20261113">
   <script src="/owner/region-management.js?v=20261113"></script>
-  <link rel="stylesheet" href="/owner/desktop-replies.css?v=20261116">
+  <link rel="stylesheet" href="/owner/desktop-replies.css?v=20261118-reliability">
   <link rel="stylesheet" href="/owner/launch.css?v=20261116-reset">
-  <script src="/owner/desktop-replies.js?v=20261116"></script>
-  <link rel="stylesheet" href="/owner/reservation-demo.css?v=20261117-demo1">
-  <script src="/owner/reservation-demo.js?v=20261117-contact-safety"></script>
+  <script src="/owner/desktop-replies.js?v=20261118-reliability"></script>
+  <link rel="stylesheet" href="/owner/reservation-demo.css?v=20261118-reliability">
+  <script src="/owner/reservation-demo.js?v=20261118-reliability"></script>
 </body>
 </html>

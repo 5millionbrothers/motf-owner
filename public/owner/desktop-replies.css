@@ -1,4 +1,4 @@
-@media(min-width:1024px){
+@media(min-width:0px){
   .desktop-reply-bar{display:flex;align-items:center;flex-wrap:wrap;gap:7px;padding:10px 16px;border-top:1px solid #e3e8db;background:#fafbf8;font:13px/1.5 SUIT,'Apple SD Gothic Neo',sans-serif;color:#465a36}
   .desktop-reply-bar>span:first-child{font-size:12px;margin-right:4px;color:#79856c}
   .desktop-reply-bar button{border:1px solid #dce3d3;background:#fff;color:#465a36;border-radius:4px;padding:5px 9px;cursor:pointer;font:inherit}
@@ -23,4 +23,12 @@
   .desktop-replies-actions{justify-content:flex-end}
   .desktop-replies-actions [type=submit]{background:#465a36;color:white}
   .desktop-reply-error{color:#a4563e;font-size:12px}
+}
+@media(max-width:767px){
+  .desktop-reply-bar{flex-wrap:nowrap;overflow-x:auto;gap:6px;padding:8px 10px;flex-shrink:0;min-height:44px}
+  .desktop-reply-bar>span:first-child,.desktop-reply-bar button{flex:none;white-space:nowrap}
+  .desktop-reply-bar button{min-height:32px}
+  .desktop-reply-feedback:empty{display:none}
+  .desktop-replies-dialog{width:calc(100vw - 24px);padding:18px;max-height:calc(100dvh - 32px);box-sizing:border-box}
+  .desktop-replies-dialog input,.desktop-replies-dialog textarea{font-size:16px}
 }
