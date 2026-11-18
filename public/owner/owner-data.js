@@ -1623,6 +1623,7 @@
           <p>${escapeHtml(item.date)} · ${escapeHtml(item.target)} · ${Number(item.amount).toLocaleString()}원</p>
           ${item.contactPhone ? `<p><a href="tel:${escapeHtml(String(item.contactPhone).replace(/[^0-9+]/g,''))}">전화 문의 ${escapeHtml(item.contactPhone)}</a></p>` : ''}
           ${!admin && window.motfHasBusinessPermission?.('chat') ? `<button type="button" class="secondary-btn" onclick="motfOpenPartnerTransactionChat('${escapeHtml(item.id)}')">문의자와 채팅</button>` : ''}
+          ${admin && !readOnlyPaymentIntent ? `<button type="button" class="secondary-btn" onclick="motfAdminReceiptFiles('${item.kind}','${escapeHtml(item.id)}')">영수증 PDF</button>` : ''}
           ${deadlineHtml}
           ${readOnlyPaymentIntent ? `<p>주문번호 ${escapeHtml(item.id)}${["in_progress", "expired"].includes(item.status) ? " · 결제 확인 전에는 예약을 확정하지 마세요. 운영팀에서 결제 복구로 확인할 수 있습니다." : ""}</p>` : ""}
           ${item.rejectReason ? `<p style="color:#b91c1c;">거절 사유: ${escapeHtml(item.rejectReason)}</p>` : ""}
@@ -1632,6 +1633,72 @@
       </div>
     `;
   }
+
+  window.motfAdminReceiptFiles = async function adminReceiptFiles(kind, id) {
+    if (window.motfCurrentProfile?.role !== 'admin') return;
+    const existing = document.getElementById('motfReceiptFilesDialog');
+    if (existing?.open) return;
+    const dialog = document.createElement('dialog');
+    dialog.id = 'motfReceiptFilesDialog';
+    dialog.className = 'owner-receipt-dialog';
+    dialog.setAttribute('aria-labelledby', 'motfReceiptFilesTitle');
+    dialog.innerHTML = '<div class="owner-receipt-heading"><h2 id="motfReceiptFilesTitle">영수증 PDF</h2><form method="dialog"><button class="secondary-btn">닫기</button></form></div><div data-receipt-content role="status">실결제 내역을 확인하고 있습니다.</div>';
+    document.body.append(dialog);
+    dialog.addEventListener('close', () => dialog.remove(), {once:true});
+    dialog.showModal();
+    const content = dialog.querySelector('[data-receipt-content]');
+    const {data, error} = await client().rpc('get_admin_settlement_receipt_target', {target_kind:kind,target_transaction_id:id});
+    if (!dialog.open) return;
+    const target = data?.[0];
+    if (error || !target) {
+      content.textContent = error ? '결제 정보를 조회하지 못했습니다. 잠시 후 다시 시도해주세요.' : '등록할 수 있는 실제 결제 내역이 없습니다.';
+      return;
+    }
+    content.removeAttribute('role');
+    const labels = {card:'카드 매출전표',cash:'현금영수증'};
+    const bucket = client().storage.from('settlement-receipts');
+    const attached = new Set(target.receipt_kinds || []);
+    function render(message = '') {
+      content.innerHTML = `<p><b>결제 주문번호</b> ${escapeHtml(target.order_id)} · ${escapeHtml(target.payment_method)} · ${Number(target.amount).toLocaleString('ko-KR')}원</p>
+        <p>이 주문의 공식 PDF만 등록해주세요. 이용자가 결산 ZIP을 받을 때 함께 내려받습니다. 파일당 2MB까지 올릴 수 있습니다.</p>
+        <form data-receipt-form class="owner-receipt-form"><label>문서 종류<select name="kind">${Object.entries(labels).map(([key,label])=>`<option value="${key}">${label}${attached.has(key) ? ' (등록됨)' : ''}</option>`).join('')}</select></label>
+        <label>PDF 파일<input name="pdf" type="file" accept="application/pdf,.pdf" required></label>
+        <button class="primary-btn" type="submit">등록</button></form>
+        <div class="item-actions">${[...attached].filter(key => Object.hasOwn(labels,key)).map(key=>`<button type="button" class="secondary-btn" data-remove-receipt="${key}">${labels[key]} 첨부 제거</button>`).join('')}</div>
+        <p role="status" data-receipt-status>${escapeHtml(message)}</p>`;
+    }
+    let busy = false;
+    const setBusy = value => { busy = value; content.querySelectorAll('button, input, select').forEach(control => { control.disabled = value; }); };
+    content.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (busy) return;
+      const form = event.target, key = form.elements.kind.value, file = form.elements.pdf.files[0];
+      if (!file || !Object.hasOwn(labels,key)) return;
+      if (attached.has(key) && !confirm('이미 등록된 PDF를 새 파일로 바꿀까요?')) return;
+      setBusy(true);
+      try {
+        if (file.size > 2097152 || await file.slice(0,5).text() !== '%PDF-') throw new Error('2MB 이하의 PDF 파일만 등록할 수 있습니다.');
+        const result = await bucket.upload(`${target.intent_id}/${key}.pdf`, file, {upsert:true,contentType:'application/pdf',cacheControl:'0'});
+        if (result.error) throw new Error('영수증을 등록하지 못했습니다.');
+        attached.add(key);
+        render('영수증을 등록했습니다.');
+      } catch (failure) { content.querySelector('[data-receipt-status]').textContent = failure.message; }
+      finally { setBusy(false); }
+    });
+    content.addEventListener('click', async event => {
+      const key = event.target.closest('[data-remove-receipt]')?.dataset.removeReceipt;
+      if (busy || !attached.has(key) || !confirm('이 거래에서 영수증 PDF 첨부를 제거할까요?')) return;
+      setBusy(true);
+      try {
+        const result = await bucket.remove([`${target.intent_id}/${key}.pdf`]);
+        if (result.error) throw new Error('첨부 파일을 제거하지 못했습니다.');
+        attached.delete(key);
+        render('첨부를 제거했습니다.');
+      } catch (failure) { content.querySelector('[data-receipt-status]').textContent = failure.message; }
+      finally { setBusy(false); }
+    });
+    render();
+  };
 
   function pendingIntentBusinessId(item = {}) {
     return String(item.business_id || item.draft?.business_id || item.draft?.businessId || "");

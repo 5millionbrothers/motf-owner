@@ -2675,3 +2675,13 @@
 .chat-shared-contacts>strong { font-size:13px; }
 .chat-shared-contacts>a { font-size:14px; color:#445b34; text-decoration:underline; }
 .chat-shared-contacts>small { width:100%; font-size:12px; color:#687260; }
+
+.owner-receipt-dialog { width:min(560px,calc(100% - 24px)); max-height:90vh; padding:22px; border:1px solid var(--line); border-radius:8px; color:var(--ink); }
+.owner-receipt-dialog::backdrop { background:rgb(28 36 25 / 45%); }
+.owner-receipt-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; }
+.owner-receipt-heading h2 { margin:0; font-size:18px; }
+.owner-receipt-dialog p { margin:0 0 12px; overflow-wrap:anywhere; }
+.owner-receipt-form { display:grid; gap:12px; margin-bottom:12px; }
+.owner-receipt-form label { display:grid; gap:5px; }
+.owner-receipt-form input { max-width:100%; }
+.owner-receipt-form button { justify-self:start; }

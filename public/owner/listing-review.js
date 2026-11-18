@@ -63,13 +63,14 @@
       client().from("offerings").select("*").eq("business_id", business.id).is("retired_at",null).order("sort_order"),
     ]);
     if (businessError || offeringError) return alert((businessError || offeringError).message);
-    const missing = missingItems(freshBusiness, offerings || []);
+    const currentOfferings = window.MotfOwnerReliability.visibleOfferings(offerings || [], business.business_type);
+    const missing = missingItems(freshBusiness, currentOfferings);
     if (!confirm(`${missing.length ? `확인 권장 항목이 ${missing.length}개 남아 있습니다. 그래도 ` : ""}운영팀에 신규 등록 심사를 신청할까요?`)) return;
     const button = $("#motfSubmitListingButton");
     if (button) button.disabled = true;
     const { error } = await client().rpc("submit_business_listing_review", {
       target_business_id: business.id, proposed_business: freshBusiness,
-      proposed_offerings: offerings || [], requested_type: "new_listing",
+      proposed_offerings: currentOfferings, requested_type: "new_listing",
     });
     if (error) { if (button) button.disabled = false; return alert(error.message); }
     alert("등록 신청을 보냈습니다. 운영팀 승인 전까지 이용자 화면에는 노출되지 않습니다.");
@@ -85,15 +86,74 @@
     return `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(shown || "미입력")}</dd></div>`;
   }
 
-  function fullRequestDetail(request, current) {
+  const photoUrls = (row, cover, gallery) => [...new Set([row?.[cover], ...(row?.[gallery] || [])].filter(Boolean))];
+  const stableValue = value => Array.isArray(value) ? value.map(stableValue)
+    : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key,stableValue(value[key])]))
+      : value == null ? '' : String(value);
+  const displayValue = value => Array.isArray(value) ? value.map(displayValue).filter(Boolean).join('\n')
+    : value && typeof value === 'object' ? Object.entries(value).map(([key,item])=>`${key}: ${displayValue(item)}`).join(' · ')
+      : String(value ?? '');
+  const diffKey = row => String(row.name || '').normalize('NFKC').trim().toLowerCase();
+  const businessFields = {
+    business_name:'숙소명', representative_name:'대표자', phone:'연락처', business_number:'사업자등록번호',
+    business_start_date:'개업일', region:'지역', postal_code:'우편번호', address:'주소', address_detail:'상세 주소',
+    description:'숙소 소개', short_description:'짧은 소개', highlight_keys:'특징', facilities:'시설', nearby_tags:'주변 정보',
+    shoulder_season_ranges:'준성수기 기간',peak_season_ranges:'성수기 기간',amenity_details:'시설 상세',extra_fees:'추가 요금',
+    latitude:'위도',longitude:'경도',
+  };
+  const roomFields = {
+    name:'객실명',description:'객실 소개',price:'기본 금액',offseason_weekday_price:'비수기 평일',offseason_weekend_price:'비수기 주말',
+    shoulder_weekday_price:'준성수기 평일',shoulder_weekend_price:'준성수기 주말',peak_weekday_price:'성수기 평일',
+    peak_weekend_price:'성수기 주말',base_people:'기준 인원',max_people:'최대 인원',extra_person_fee:'추가 인원 요금',
+    is_active:'공개 여부',sort_order:'배치 순서',feature_summary:'특징',amenity_details:'부대시설',detail_sections:'세부 안내',
+  };
+  function diffRow(label, before, after, photos = false) {
+    if (JSON.stringify(stableValue(before)) === JSON.stringify(stableValue(after))) return '';
+    const cell = value => photos ? photoDiffCell(value) : escapeHtml(displayValue(value) || '미입력');
+    return `<div class="listing-diff-row"><strong>${escapeHtml(label)}</strong><div class="listing-diff-before"><small>기존</small>${cell(before)}</div><div class="listing-diff-after"><small>변경</small>${cell(after)}</div></div>`;
+  }
+  function photoDiffCell(urls) {
+    if (!urls.length) return '사진 없음';
+    return `<div class="listing-diff-photos">${urls.map(url => `<img src="${escapeHtml(url)}" alt="심사 사진" loading="lazy">`).join('')}</div>`;
+  }
+  function roomDiffValue(key, value) {
+    if (value == null || value === '') return value;
+    if (/price$|_fee$/.test(key)) return money(value);
+    if (key === 'is_active') return value ? '공개' : '숨김';
+    return value;
+  }
+  function listingDiff(request, current, currentRooms) {
+    if (request.status !== 'pending' || request.request_type === 'new_listing') return '';
+    if (!current || !currentRooms) return '<p class="listing-review-note">현재 공개 정보를 불러오지 못해 변경사항을 비교할 수 없습니다.</p>';
+    const proposed = request.proposed_business, nextRooms = request.proposed_offerings;
+    const fields = Object.entries(businessFields).filter(([key]) => Object.hasOwn(proposed,key))
+      .map(([key,label]) => diffRow(label,current[key],proposed[key])).join('')
+      + diffRow('숙소 사진',photoUrls(current,'cover_image_url','gallery_image_urls'),photoUrls(proposed,'cover_image_url','gallery_image_urls'),true);
+    if (current.business_type === 'market') return `<section class="listing-diff"><h4>변경사항</h4>${fields || '<p>달라진 공개 정보가 없습니다.</p>'}</section>`;
+    const matched = new Set();
+    const exactIds = new Set(nextRooms.map(room => room.id).filter(Boolean));
+    const nextChanges = nextRooms.map(next => {
+      const sameName = currentRooms.filter(room => !exactIds.has(room.id) && diffKey(room) === diffKey(next));
+      const before = currentRooms.find(room => room.id && room.id === next.id)
+        || (sameName.length === 1 && nextRooms.filter(room => diffKey(room) === diffKey(next)).length === 1 ? sameName[0] : null);
+      if (!before) return diffRow('객실 추가','없음',next.name);
+      matched.add(before);
+      const rows = Object.entries(roomFields).map(([key,label]) => diffRow(label,roomDiffValue(key,before[key]),roomDiffValue(key,next[key]))).join('')
+        + diffRow('객실 사진',photoUrls(before,'image_url','image_urls'),photoUrls(next,'image_url','image_urls'),true);
+      return rows ? `<h5>${escapeHtml(next.name)}</h5>${rows}` : '';
+    }).join('');
+    const removed = currentRooms.filter(room => !matched.has(room)).map(room => diffRow('객실 삭제',room.name,'없음')).join('');
+    return `<section class="listing-diff"><h4>변경사항</h4>${fields || nextChanges || removed ? fields + nextChanges + removed : '<p>달라진 공개 정보가 없습니다.</p>'}</section>`;
+  }
+
+  function fullRequestDetail(request, current, currentRooms) {
     const proposed = request.proposed_business || {};
     const rooms = Array.isArray(request.proposed_offerings) ? request.proposed_offerings : [];
     const photos = [...new Set([proposed.cover_image_url, ...(proposed.gallery_image_urls || [])].filter(Boolean))];
-    return `<details class="listing-review-full"><summary>신청 내용 전체 보기</summary>
-      ${request.request_type !== "new_listing" ? `<section><h4>현재 공개 정보와 비교</h4><div class="listing-review-compare"><div><b>현재</b><p>${escapeHtml(current?.business_name || "-")}<br>${escapeHtml(current?.address || "-")}<br>${escapeHtml(current?.phone || "-")}</p></div><div><b>변경 신청</b><p>${escapeHtml(proposed.business_name || "-")}<br>${escapeHtml([proposed.address, proposed.address_detail].filter(Boolean).join(" ") || "-")}<br>${escapeHtml(proposed.phone || "-")}</p></div></div></section>` : ""}
+    return `${listingDiff(request,current,currentRooms)}<details class="listing-review-full"><summary>신청 내용 전체 보기</summary>
       <section><h4>숙소 기본 정보</h4><dl class="listing-review-fields">${reviewField("숙소명", proposed.business_name)}${reviewField("대표자", proposed.representative_name)}${reviewField("사업자등록번호", proposed.business_registration_number)}${reviewField("연락처", proposed.phone)}${reviewField("주소", [proposed.address, proposed.address_detail].filter(Boolean).join(" "))}${reviewField("지역", proposed.region)}${reviewField("소개", proposed.description)}${reviewField("짧은 소개", proposed.short_description)}${reviewField("시설", proposed.facilities)}${reviewField("특징", proposed.highlight_summary)}${reviewField("추가 요금", (proposed.extra_fees || []).map((fee) => `${fee.label || "항목"} ${money(fee.amount)} ${fee.detail || ""}`))}</dl></section>
       <section><h4>숙소 사진 ${photos.length}장</h4><div class="listing-review-gallery">${photos.map((url) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(url)}" alt="숙소 등록 사진"></a>`).join("") || "등록된 사진 없음"}</div></section>
-      <section><h4>객실 ${rooms.length}개</h4><div class="listing-review-rooms">${rooms.map((room, index) => `<article><b>${index + 1}. ${escapeHtml(room.name || "객실명 미입력")}</b><dl>${reviewField("가격", money(room.offseason_weekday_price ?? room.price))}${reviewField("비수기 주말", money(room.offseason_weekend_price))}${reviewField("준성수기 평일/주말", `${money(room.shoulder_weekday_price)} / ${money(room.shoulder_weekend_price)}`)}${reviewField("성수기 평일/주말", `${money(room.peak_weekday_price)} / ${money(room.peak_weekend_price)}`)}${reviewField("기준/최대 인원", `${room.base_people || 0}명 / ${room.max_people || 0}명`)}${reviewField("추가 인원 요금", money(room.extra_person_fee))}${reviewField("화장실", `${room.bathroom_count || 0}개`)}${reviewField("특징", room.feature_summary)}${reviewField("설명", room.description)}</dl><div class="listing-review-gallery">${[room.image_url, ...(room.image_urls || [])].filter(Boolean).map((url) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(url)}" alt="객실 사진"></a>`).join("")}</div></article>`).join("") || "객실 정보 없음"}</div></section>
+      <section><h4>객실 ${rooms.length}개</h4><div class="listing-review-rooms">${rooms.map((room, index) => `<article><b>${index + 1}. ${escapeHtml(room.name || "객실명 미입력")}</b><dl>${reviewField("가격", money(room.offseason_weekday_price ?? room.price))}${reviewField("비수기 주말", money(room.offseason_weekend_price))}${reviewField("준성수기 평일/주말", `${money(room.shoulder_weekday_price)} / ${money(room.shoulder_weekend_price)}`)}${reviewField("성수기 평일/주말", `${money(room.peak_weekday_price)} / ${money(room.peak_weekend_price)}`)}${reviewField("기준/최대 인원", `${room.base_people || 0}명 / ${room.max_people || 0}명`)}${reviewField("추가 인원 요금", money(room.extra_person_fee))}${reviewField("특징", room.feature_summary)}${reviewField("설명", room.description)}</dl><div class="listing-review-gallery">${[room.image_url, ...(room.image_urls || [])].filter(Boolean).map((url) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(url)}" alt="객실 사진"></a>`).join("")}</div></article>`).join("") || "객실 정보 없음"}</div></section>
     </details>`;
   }
 
@@ -113,7 +173,7 @@
     const pendingBusinesses = new Set((requests || []).filter(item=>item.status==='pending').map(item=>item.business_id));
     const drafts = (draftResult.data || []).filter(item=>!pendingBusinesses.has(item.id));
     const businessIds = [...new Set([...(requests || []).map((item) => item.business_id),...drafts.map(item=>item.id)])];
-    const [{ data: businesses }, { data: currentOfferings }] = businessIds.length
+    const [{ data: businesses }, { data: currentOfferings, error: currentRoomsError }] = businessIds.length
       ? await Promise.all([
         client().from("businesses").select("*").in("id", businessIds),
         client().from("offerings").select("*").in("business_id", businessIds).is("retired_at",null).order("sort_order"),
@@ -125,7 +185,7 @@
     const hydratedRequests = (requests || []).map((request) => {
       const current = byId.get(request.business_id) || {};
       const proposedBusiness = request.proposed_business && Object.keys(request.proposed_business).length ? request.proposed_business : current;
-      const proposedOfferings = Array.isArray(request.proposed_offerings) && request.proposed_offerings.length
+      const proposedOfferings = Array.isArray(request.proposed_offerings)
         ? request.proposed_offerings
         : (offeringsByBusiness.get(request.business_id) || []);
       return { ...request, proposed_business: proposedBusiness, proposed_offerings: proposedOfferings };
@@ -142,7 +202,7 @@
       const request = hydratedRequests[index];
       if (!request) return;
       const actions = card.querySelector(".listing-review-card-actions");
-      (actions || card).insertAdjacentHTML(actions ? "beforebegin" : "beforeend", fullRequestDetail(request, byId.get(request.business_id)));
+      (actions || card).insertAdjacentHTML(actions ? "beforebegin" : "beforeend", fullRequestDetail(request, byId.get(request.business_id), currentRoomsError ? null : window.MotfOwnerReliability.visibleOfferings(offeringsByBusiness.get(request.business_id) || [], byId.get(request.business_id)?.business_type)));
     });
     if(drafts.length){
       if(!requests?.length)area.replaceChildren();
