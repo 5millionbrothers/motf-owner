@@ -10,7 +10,7 @@
   <link rel="icon" type="image/svg+xml" href="/owner/assets/motf-favicon.svg?v=20261103-symbol">
   <link rel="icon" type="image/png" sizes="32x32" href="/owner/assets/motf-favicon-32.png?v=20261103-symbol">
   <link rel="apple-touch-icon" sizes="180x180" href="/owner/assets/motf-apple-touch-icon.png?v=20261103-symbol">
-  <link rel="stylesheet" href="/owner/styles.css?v=20260911-v2">
+  <link rel="stylesheet" href="/owner/styles.css?v=20261119-rooms">
   <link rel="stylesheet" href="/owner/loading.css?v=20261103-symbol">
   <script src="/owner/loading.js?v=20261014-workspace1"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -1096,6 +1096,8 @@
               <div id="motfSeasonCalendarGrid" class="season-calendar-grid"></div>
               <div id="motfSeasonCalendarSummary" class="season-calendar-summary"></div>
             </div>
+            <div id="motfWeekendDaysEditor" class="owner-weekend-editor"></div>
+            <p id="motfRoomOrderStatus" class="owner-room-order-status" role="status"></p>
             <div id="roomPriceTableBody" class="owner-room-editor-list"></div>
             <button class="secondary-btn" style="margin-top:10px; padding:6px 12px; font-size:13px;" onclick="addTableRow()"><i data-lucide="plus" style="width:14px; display:inline;"></i> <span id="addBtnDynamicText">객실 추가</span></button>
           </div>
@@ -2254,6 +2256,8 @@
       const tbody = document.getElementById('roomPriceTableBody');
       if (currentOwnerType === 'market') { tbody.innerHTML='';document.getElementById('priceSettingWrapperSector').hidden=true;return; }
       tbody.innerHTML = '';
+      const weekendEditor = document.getElementById('motfWeekendDaysEditor');
+      if (weekendEditor) { weekendEditor.hidden = currentOwnerType !== 'stay'; if (currentOwnerType === 'stay') renderWeekendDaysEditor(); }
       const data = mockData[currentOwnerType];
 
       const attr = (value) => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -2329,12 +2333,22 @@
         return;
       }
 
+      const weekendDays = stayWeekendDays();
+      const noWeekend = !weekendDays.length;
       data.rooms.forEach((room, idx) => {
         const card = document.createElement('article');
         card.className = 'owner-room-editor';
+        card.dataset.roomPosition = String(idx);
         const moneyField = (key, label) => `<label><span>${label}</span><input type="text" inputmode="numeric" value="${Number(room[key] ?? room.price ?? 0).toLocaleString('ko-KR')}" oninput="syncRoomMoney(${idx}, '${key}', this)"></label>`;
+        const roomLabel = attr(room.name || `객실 ${idx + 1}`);
         card.innerHTML = `
           <div class="owner-room-editor-head">
+            <div class="owner-room-order">
+              <span class="owner-room-drag" draggable="true" title="끌어서 순서 변경" aria-hidden="true"><i data-lucide="grip-vertical"></i></span>
+              <span class="owner-room-order-number">${idx + 1}</span>
+              <button type="button" class="secondary-btn" onclick="moveStayRoom(${idx}, ${idx - 1})" ${idx === 0 ? 'disabled' : ''} aria-label="${roomLabel} 위로">↑</button>
+              <button type="button" class="secondary-btn" onclick="moveStayRoom(${idx}, ${idx + 1})" ${idx === data.rooms.length - 1 ? 'disabled' : ''} aria-label="${roomLabel} 아래로">↓</button>
+            </div>
             <input type="text" value="${attr(room.name)}" oninput="syncRoomName(${idx}, this.value)" aria-label="객실명">
             <button class="motf-reject-action-btn" onclick="removeTableRow(${idx})">객실 삭제</button>
           </div>
@@ -2344,14 +2358,14 @@
               <label><span>최대인원</span><input type="number" min="1" value="${room.max_people || ''}" oninput="syncRoomNumber(${idx}, 'max_people', this.value)"></label>
               <label><span>추가 1인 요금 <small>별도결제 기준</small></span><input type="text" inputmode="numeric" value="${Number(room.extra_person_fee || 0).toLocaleString('ko-KR')}" oninput="syncRoomMoney(${idx}, 'extra_person_fee', this)"></label>
             </div>
-            <p class="owner-room-price-title"><strong>시즌별 1박 객실요금</strong> · 금·토 숙박은 주말 요금으로 계산합니다.</p>
-            <div class="owner-room-price-grid">
-              ${moneyField('offseason_weekday_price', '비수기 평일')}
-              ${moneyField('offseason_weekend_price', '비수기 주말')}
-              ${moneyField('shoulder_weekday_price', '준성수기 평일')}
-              ${moneyField('shoulder_weekend_price', '준성수기 주말')}
-              ${moneyField('peak_weekday_price', '성수기 평일')}
-              ${moneyField('peak_weekend_price', '성수기 주말')}
+            <p class="owner-room-price-title"><strong>시즌별 1박 객실요금</strong> · ${noWeekend ? '평일·주말 구분 없이 같은 요금으로 계산합니다.' : `${weekendDaysLabel(weekendDays)} 숙박은 주말 요금으로 계산합니다.`}</p>
+            <div class="owner-room-price-grid${noWeekend ? ' owner-room-price-grid-flat' : ''}">
+              ${moneyField('offseason_weekday_price', noWeekend ? '비수기' : '비수기 평일')}
+              ${noWeekend ? '' : moneyField('offseason_weekend_price', '비수기 주말')}
+              ${moneyField('shoulder_weekday_price', noWeekend ? '준성수기' : '준성수기 평일')}
+              ${noWeekend ? '' : moneyField('shoulder_weekend_price', '준성수기 주말')}
+              ${moneyField('peak_weekday_price', noWeekend ? '성수기' : '성수기 평일')}
+              ${noWeekend ? '' : moneyField('peak_weekend_price', '성수기 주말')}
             </div>
             <div class="owner-room-bath-grid">
               <label><span>객실 내 화장실</span><input type="number" min="0" value="${room.bathroom_count || 0}" oninput="syncRoomNumber(${idx}, 'bathroom_count', this.value)"></label>
@@ -2359,9 +2373,85 @@
               <label><span>화장실 특이사항</span><input type="text" maxlength="160" value="${attr(room.bathroom_note || '')}" oninput="syncRoomText(${idx}, 'bathroom_note', this.value)" placeholder="예: 객실 내부 2개, 샤워 가능"></label>
             </div>
           </div>`;
+        const handle = card.querySelector('.owner-room-drag');
+        handle.ondragstart = (event) => { draggedStayRoom = idx; event.dataTransfer.setData('text/plain', String(idx)); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setDragImage?.(card, 24, 24); card.classList.add('is-dragging'); };
+        handle.ondragend = () => { draggedStayRoom = null; card.classList.remove('is-dragging'); };
+        card.ondragover = (event) => { if (draggedStayRoom == null) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; card.classList.add('is-drop-target'); };
+        card.ondragleave = () => card.classList.remove('is-drop-target');
+        card.ondrop = (event) => { if (draggedStayRoom == null) return; event.preventDefault(); const from = draggedStayRoom; draggedStayRoom = null; moveStayRoom(from, idx); };
         tbody.appendChild(card);
       });
+      lucide.createIcons?.();
       renderHighlightChoices();
+    }
+
+    var draggedStayRoom = null;
+    var WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+    var WEEKEND_PRESETS = [
+      { label: '금·토', days: [5, 6] },
+      { label: '토·일', days: [6, 0] },
+      { label: '금액 차이 없음', days: [] },
+    ];
+    function normalizeWeekendDays(value) {
+      if (!Array.isArray(value)) return null;
+      return [...new Set(value.map(Number).filter(day => Number.isInteger(day) && day >= 0 && day <= 6))];
+    }
+    function stayWeekendDays() {
+      return normalizeWeekendDays(mockData.stay.weekendDays) ?? [5, 6];
+    }
+    function weekendDaysLabel(days) {
+      return [1, 2, 3, 4, 5, 6, 0].filter(day => days.includes(day)).map(day => WEEKDAY_LABELS[day]).join('·');
+    }
+    function sameWeekendDays(a, b) {
+      return a.length === b.length && a.every(day => b.includes(day));
+    }
+    function renderWeekendDaysEditor() {
+      const box = document.getElementById('motfWeekendDaysEditor');
+      if (!box) return;
+      const days = stayWeekendDays();
+      box.innerHTML = `
+        <div class="owner-weekend-head">
+          <strong>주말 요금 적용 요일</strong>
+          <small>체크인(숙박) 요일 기준이며 모든 객실과 시즌에 같이 적용됩니다.</small>
+        </div>
+        <div class="owner-weekend-presets" role="group" aria-label="주말 요일 빠른 선택">
+          ${WEEKEND_PRESETS.map((preset, index) => `<button type="button" class="owner-choice-chip ${sameWeekendDays(days, preset.days) ? 'active' : ''}" aria-pressed="${sameWeekendDays(days, preset.days)}" onclick="setStayWeekendPreset(${index})">${preset.label}</button>`).join('')}
+        </div>
+        <div class="owner-weekend-days" role="group" aria-label="주말로 볼 숙박 요일 직접 선택">
+          ${[1, 2, 3, 4, 5, 6, 0].map(day => `<button type="button" class="owner-choice-chip ${days.includes(day) ? 'active' : ''}" aria-pressed="${days.includes(day)}" onclick="toggleStayWeekendDay(${day})">${WEEKDAY_LABELS[day]}</button>`).join('')}
+        </div>
+        <p class="owner-field-help">${days.length ? `${weekendDaysLabel(days)}요일에 체크인하는 숙박은 주말 요금, 나머지는 평일 요금으로 계산됩니다.` : '모든 요일에 같은 요금이 적용됩니다. 저장하면 주말 요금은 평일 요금과 같게 맞춰집니다.'}</p>`;
+    }
+    function setStayWeekendDays(days) {
+      mockData.stay.weekendDays = normalizeWeekendDays(days) || [];
+      renderRoomPriceTable();
+      const status = document.getElementById('motfRoomOrderStatus');
+      if (status) status.textContent = '주말 요일을 바꿨습니다. 아래 저장 버튼을 눌러야 이용자 페이지에 반영됩니다.';
+    }
+    function setStayWeekendPreset(index) {
+      const preset = WEEKEND_PRESETS[index];
+      if (preset) setStayWeekendDays(preset.days);
+    }
+    function toggleStayWeekendDay(day) {
+      const days = new Set(stayWeekendDays());
+      days.has(day) ? days.delete(day) : days.add(day);
+      setStayWeekendDays([...days]);
+    }
+    function moveStayRoom(from, to) {
+      const rooms = mockData[currentOwnerType]?.rooms || [];
+      if (currentOwnerType !== 'stay' || from === to || from < 0 || to < 0 || from >= rooms.length || to >= rooms.length) return;
+      const selected = rooms[currentSelectedPhotoIndex - 1];
+      const [moved] = rooms.splice(from, 1);
+      rooms.splice(to, 0, moved);
+      rebuildPhotoTabsArray();
+      if (selected) currentSelectedPhotoIndex = rooms.indexOf(selected) + 1;
+      renderRoomPriceTable();
+      renderPhotoTabs();
+      const status = document.getElementById('motfRoomOrderStatus');
+      if (status) status.textContent = `'${moved.name || '객실'}'을(를) ${to + 1}번째로 옮겼습니다. 아래 저장 버튼을 눌러야 이용자 페이지에 반영됩니다.`;
+      const card = document.querySelector(`#roomPriceTableBody [data-room-position="${to}"]`);
+      card?.querySelector(to < from ? '.owner-room-order button:nth-of-type(1)' : '.owner-room-order button:nth-of-type(2)')?.focus({ preventScroll: true });
+      card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
 
     function renderPhotoTabs() {
@@ -3303,6 +3393,12 @@
       window.motfApplyOfferingsToDashboard = function(offerings) {
         if (currentOwnerType === 'admin' || !Array.isArray(offerings)) return;
         const visible = window.MotfOwnerReliability.visibleOfferings(offerings, currentOwnerType);
+        if (currentOwnerType === 'stay') {
+          const configured = visible.map(item => normalizeWeekendDays(item.detail_sections?.weekendDays)).find(Boolean);
+          mockData.stay.weekendDays = configured || [5, 6];
+          const status = document.getElementById('motfRoomOrderStatus');
+          if (status) status.textContent = '';
+        }
         mockData[currentOwnerType].rooms = visible.map(item => ({
           id: item.id,
           is_active: item.is_active !== false,
@@ -3341,6 +3437,8 @@
       };
       window.motfReadOfferingsFromDashboard = function() {
         if (currentOwnerType === 'admin') return [];
+        const stayWeekend = currentOwnerType === 'stay' ? stayWeekendDays() : null;
+        const flatPrice = Boolean(stayWeekend && !stayWeekend.length);
         return mockData[currentOwnerType].rooms.map((item, index) => ({
           id: item.id || (item.id = crypto.randomUUID()),
           is_active: item.is_active !== false,
@@ -3352,11 +3450,11 @@
           base_people: item.base_people || item.min_people || null,
           extra_person_fee: Number(item.extra_person_fee) || 0,
           offseason_weekday_price: Number(item.offseason_weekday_price ?? item.price) || 0,
-          offseason_weekend_price: Number(item.offseason_weekend_price ?? item.price) || 0,
+          offseason_weekend_price: Number((flatPrice ? item.offseason_weekday_price : item.offseason_weekend_price) ?? item.price) || 0,
           shoulder_weekday_price: Number(item.shoulder_weekday_price ?? item.price) || 0,
-          shoulder_weekend_price: Number(item.shoulder_weekend_price ?? item.price) || 0,
+          shoulder_weekend_price: Number((flatPrice ? item.shoulder_weekday_price : item.shoulder_weekend_price) ?? item.price) || 0,
           peak_weekday_price: Number(item.peak_weekday_price ?? item.price) || 0,
-          peak_weekend_price: Number(item.peak_weekend_price ?? item.price) || 0,
+          peak_weekend_price: Number((flatPrice ? item.peak_weekday_price : item.peak_weekend_price) ?? item.price) || 0,
           bathroom_count: Number(item.bathroom_count) || 0,
           bathroom_gender_separated: Boolean(item.bathroom_gender_separated),
           bathroom_note: item.bathroom_note || null,
@@ -3367,7 +3465,7 @@
           sort_order: index,
           feature_summary: item.feature_summary || [],
           amenity_details: item.amenity_details || [],
-          detail_sections: item.detail_sections || {},
+          detail_sections: stayWeekend ? { ...(item.detail_sections || {}), weekendDays: stayWeekend } : item.detail_sections || {},
           origin: item.origin || null,
           nutrition_info: item.nutrition_info || {},
           is_alcohol: Boolean(item.is_alcohol),
