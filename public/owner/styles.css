@@ -3531,3 +3531,27 @@ input[type="range"] {
   .owner-weekend-editor { padding: 12px; }
   .owner-weekend-days .owner-choice-chip { flex: 1 0 calc(14.28% - 6px); min-width: 0; padding-inline: 0; }
 }
+
+/* Stay room groups (20261122) */
+.owner-room-group-adder { margin: 0 0 12px; border: 1px dashed var(--line); border-radius: 8px; background: var(--paper); }
+.owner-room-group-adder > summary { display: flex; align-items: center; gap: 8px; padding: 12px 14px; cursor: pointer; font-weight: 700; font-size: 14px; list-style: none; }
+.owner-room-group-adder > summary::-webkit-details-marker { display: none; }
+.owner-room-group-adder > summary svg { width: 18px; height: 18px; color: var(--teal-dark); }
+.owner-room-group-adder-body { padding: 0 14px 14px; display: grid; gap: 10px; }
+.owner-room-group-adder-body .owner-field-help { margin: 0; }
+.owner-room-group-adder-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 2fr) auto; gap: 10px; align-items: end; }
+.owner-room-group-adder-grid label, .owner-room-group-row label { display: grid; gap: 6px; font-size: 13px; }
+.owner-room-group-adder-grid .secondary-btn { height: 42px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.owner-room-group-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.owner-room-group-row small { color: var(--muted, #6b7280); font-weight: 400; font-size: 11px; }
+.owner-room-group-badge { flex: 0 0 auto; padding: 4px 10px; border-radius: 999px; background: var(--teal-dark); color: #fff; font-size: 12px; font-weight: 700; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.owner-room-pool-note { margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; background: var(--paper); }
+.owner-room-in-group { border-left: 3px solid var(--teal-dark); }
+@media (max-width: 900px) {
+  .owner-room-group-adder-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .owner-room-group-adder-grid .secondary-btn { grid-column: 1 / -1; justify-content: center; }
+}
+@media (max-width: 620px) {
+  .owner-room-group-row { grid-template-columns: 1fr; }
+  .owner-room-group-badge { order: 2; }
+}

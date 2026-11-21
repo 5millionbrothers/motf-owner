@@ -10,7 +10,7 @@
   <link rel="icon" type="image/svg+xml" href="/owner/assets/motf-favicon.svg?v=20261103-symbol">
   <link rel="icon" type="image/png" sizes="32x32" href="/owner/assets/motf-favicon-32.png?v=20261103-symbol">
   <link rel="apple-touch-icon" sizes="180x180" href="/owner/assets/motf-apple-touch-icon.png?v=20261103-symbol">
-  <link rel="stylesheet" href="/owner/styles.css?v=20261119-rooms">
+  <link rel="stylesheet" href="/owner/styles.css?v=20261122-groups">
   <link rel="stylesheet" href="/owner/loading.css?v=20261103-symbol">
   <script src="/owner/loading.js?v=20261014-workspace1"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -2335,10 +2335,40 @@
 
       const weekendDays = stayWeekendDays();
       const noWeekend = !weekendDays.length;
+      const groupNames = [...new Set(data.rooms.map(item => roomGroupOf(item)?.name).filter(Boolean))];
+      const adder = document.createElement('details');
+      adder.className = 'owner-room-group-adder';
+      adder.open = roomGroupAdderOpen;
+      adder.ontoggle = () => { roomGroupAdderOpen = adder.open; };
+      adder.innerHTML = `
+        <summary><i data-lucide="tent"></i><span>캠핑장처럼 자리가 나뉘는 객실 한 번에 추가</span></summary>
+        <div class="owner-room-group-adder-body">
+          <p class="owner-field-help">불멍캠프 1~5, 캠핑사이트 D-1~D-5처럼 같은 종류의 자리를 그룹으로 묶어요. 이용자는 그룹을 먼저 고르고, 그다음 자리를 고르거나 자동으로 배정받아요.</p>
+          <div class="owner-room-group-adder-grid">
+            <label><span>그룹 이름</span><input type="text" id="motfGroupAddName" list="motfRoomGroupList" maxlength="40" placeholder="예: 불멍캠프"></label>
+            <label><span>자리 수</span><input type="number" id="motfGroupAddCount" min="1" max="50" value="5"></label>
+            <label><span>방식</span><select id="motfGroupAddMode"><option value="pool">자동 배정 · 자리가 모두 같음</option><option value="pick">자리 직접 선택 · 자리마다 다름</option></select></label>
+            <button type="button" class="secondary-btn" onclick="addRoomGroupSites()"><i data-lucide="plus"></i> 자리 추가</button>
+          </div>
+        </div>`;
+      tbody.appendChild(adder);
+      const groupList = document.createElement('datalist');
+      groupList.id = 'motfRoomGroupList';
+      groupList.innerHTML = groupNames.map(name => `<option value="${attr(name)}"></option>`).join('');
+      tbody.appendChild(groupList);
       data.rooms.forEach((room, idx) => {
         const card = document.createElement('article');
         card.className = 'owner-room-editor';
         card.dataset.roomPosition = String(idx);
+        const roomGroup = roomGroupOf(room);
+        const poolLead = roomGroup?.mode === 'pool' ? poolGroupLead(roomGroup.name) : null;
+        const poolFollower = Boolean(poolLead && poolLead !== room);
+        if (roomGroup) card.classList.add('owner-room-in-group');
+        const groupRow = `
+            <div class="owner-room-group-row">
+              <label><span>객실 그룹 <small>자리가 나뉘는 캠핑장 등만</small></span><input type="text" list="motfRoomGroupList" maxlength="40" value="${attr(roomGroup?.name || '')}" onchange="setRoomGroupName(${idx}, this.value)" placeholder="비워두면 일반 객실"></label>
+              ${roomGroup ? `<label><span>그룹 방식</span><select onchange="setRoomGroupMode(${idx}, this.value)"><option value="pick" ${roomGroup.mode === 'pick' ? 'selected' : ''}>자리 직접 선택 · 자리마다 다름</option><option value="pool" ${roomGroup.mode === 'pool' ? 'selected' : ''}>자동 배정 · 자리가 모두 같음</option></select></label>` : ''}
+            </div>`;
         const moneyField = (key, label) => `<label><span>${label}</span><input type="text" inputmode="numeric" value="${Number(room[key] ?? room.price ?? 0).toLocaleString('ko-KR')}" oninput="syncRoomMoney(${idx}, '${key}', this)"></label>`;
         const roomLabel = attr(room.name || `객실 ${idx + 1}`);
         card.innerHTML = `
@@ -2349,10 +2379,14 @@
               <button type="button" class="secondary-btn" onclick="moveStayRoom(${idx}, ${idx - 1})" ${idx === 0 ? 'disabled' : ''} aria-label="${roomLabel} 위로">↑</button>
               <button type="button" class="secondary-btn" onclick="moveStayRoom(${idx}, ${idx + 1})" ${idx === data.rooms.length - 1 ? 'disabled' : ''} aria-label="${roomLabel} 아래로">↓</button>
             </div>
+            ${roomGroup ? `<span class="owner-room-group-badge">${attr(roomGroup.name)}</span>` : ''}
             <input type="text" value="${attr(room.name)}" oninput="syncRoomName(${idx}, this.value)" aria-label="객실명">
-            <button class="motf-reject-action-btn" onclick="removeTableRow(${idx})">객실 삭제</button>
+            <button class="motf-reject-action-btn" onclick="removeTableRow(${idx})">${roomGroup ? '자리 삭제' : '객실 삭제'}</button>
           </div>
+          ${poolFollower ? `<div class="owner-room-editor-body">${groupRow}<p class="owner-field-help owner-room-pool-note">자동 배정 그룹이라 요금·인원·화장실·사진은 첫 자리 <strong>${attr(poolLead.name)}</strong>와 똑같이 저장돼요. 이 자리만 다르게 하려면 방식을 '자리 직접 선택'으로 바꿔주세요.</p></div>` : `
           <div class="owner-room-editor-body">
+            ${groupRow}
+            ${poolLead ? `<p class="owner-field-help owner-room-pool-note">여기서 정한 요금·인원·화장실·사진이 <strong>${attr(roomGroup.name)}</strong> 그룹의 모든 자리에 똑같이 적용돼요.</p>` : ''}
             <div class="owner-room-basic-grid">
               <label><span>기준인원</span><input type="number" min="1" value="${room.base_people || room.min_people || ''}" oninput="syncRoomNumber(${idx}, 'base_people', this.value)"></label>
               <label><span>최대인원</span><input type="number" min="1" value="${room.max_people || ''}" oninput="syncRoomNumber(${idx}, 'max_people', this.value)"></label>
@@ -2372,7 +2406,7 @@
               <label class="owner-check-label"><input type="checkbox" ${room.bathroom_gender_separated ? 'checked' : ''} onchange="syncRoomBoolean(${idx}, 'bathroom_gender_separated', this.checked)"><span>남녀 구분</span></label>
               <label><span>화장실 특이사항</span><input type="text" maxlength="160" value="${attr(room.bathroom_note || '')}" oninput="syncRoomText(${idx}, 'bathroom_note', this.value)" placeholder="예: 객실 내부 2개, 샤워 가능"></label>
             </div>
-          </div>`;
+          </div>`}`;
         const handle = card.querySelector('.owner-room-drag');
         handle.ondragstart = (event) => { draggedStayRoom = idx; event.dataTransfer.setData('text/plain', String(idx)); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setDragImage?.(card, 24, 24); card.classList.add('is-dragging'); };
         handle.ondragend = () => { draggedStayRoom = null; card.classList.remove('is-dragging'); };
@@ -2386,6 +2420,91 @@
     }
 
     var draggedStayRoom = null;
+    var roomGroupAdderOpen = false;
+    var POOL_SHARED_KEYS = ['price', 'description', 'max_people', 'min_people', 'base_people', 'extra_person_fee',
+      'offseason_weekday_price', 'offseason_weekend_price', 'shoulder_weekday_price', 'shoulder_weekend_price', 'peak_weekday_price', 'peak_weekend_price',
+      'bathroom_count', 'bathroom_gender_separated', 'bathroom_note', 'feature_summary', 'amenity_details', 'image_url', 'image_urls'];
+    function roomGroupOf(room) {
+      const group = room?.detail_sections?.roomGroup;
+      const name = String(group?.name || '').trim();
+      return name ? { name, mode: group.mode === 'pool' ? 'pool' : 'pick' } : null;
+    }
+    function poolGroupLead(name) {
+      return mockData.stay.rooms.find(item => { const g = roomGroupOf(item); return g && g.name === name && g.mode === 'pool'; }) || null;
+    }
+    function setRoomGroupStatus(text) {
+      const status = document.getElementById('motfRoomOrderStatus');
+      if (status) status.textContent = text;
+    }
+    function setRoomGroupName(idx, value) {
+      const room = mockData.stay.rooms[idx];
+      if (!room) return;
+      const name = String(value || '').trim().slice(0, 40);
+      const sections = { ...(room.detail_sections || {}) };
+      if (!name) delete sections.roomGroup;
+      else {
+        const existing = mockData.stay.rooms.map(roomGroupOf).find(group => group && group.name === name);
+        sections.roomGroup = { name, mode: existing?.mode || roomGroupOf(room)?.mode || 'pick' };
+      }
+      room.detail_sections = sections;
+      renderRoomPriceTable();
+      setRoomGroupStatus(name ? `'${room.name}'을(를) '${name}' 그룹에 넣었습니다. 아래 저장 버튼을 눌러야 반영됩니다.` : `'${room.name}'을(를) 일반 객실로 바꿨습니다. 아래 저장 버튼을 눌러야 반영됩니다.`);
+    }
+    function setRoomGroupMode(idx, mode) {
+      const group = roomGroupOf(mockData.stay.rooms[idx]);
+      if (!group) return;
+      const nextMode = mode === 'pool' ? 'pool' : 'pick';
+      mockData.stay.rooms.forEach(room => {
+        if (roomGroupOf(room)?.name === group.name) room.detail_sections = { ...(room.detail_sections || {}), roomGroup: { name: group.name, mode: nextMode } };
+      });
+      if (nextMode === 'pool') syncPoolGroupMembers();
+      renderRoomPriceTable();
+      setRoomGroupStatus(nextMode === 'pool'
+        ? `'${group.name}' 그룹을 자동 배정으로 바꿨습니다. 첫 자리의 요금·인원·사진이 모든 자리에 같이 적용돼요. 저장을 눌러야 반영됩니다.`
+        : `'${group.name}' 그룹을 자리 직접 선택으로 바꿨습니다. 자리마다 요금을 따로 정할 수 있어요. 저장을 눌러야 반영됩니다.`);
+    }
+    function syncPoolGroupMembers() {
+      const rooms = mockData.stay?.rooms || [];
+      rooms.forEach(room => {
+        const group = roomGroupOf(room);
+        if (group?.mode !== 'pool') return;
+        const lead = poolGroupLead(group.name);
+        if (!lead || lead === room) return;
+        POOL_SHARED_KEYS.forEach(key => {
+          const value = lead[key];
+          room[key] = Array.isArray(value) ? [...value] : value && typeof value === 'object' ? JSON.parse(JSON.stringify(value)) : value;
+        });
+      });
+    }
+    function addRoomGroupSites() {
+      const nameInput = document.getElementById('motfGroupAddName');
+      const name = String(nameInput?.value || '').trim().slice(0, 40);
+      const count = Math.min(50, Math.max(1, Math.floor(Number(document.getElementById('motfGroupAddCount')?.value) || 0)));
+      const requestedMode = document.getElementById('motfGroupAddMode')?.value === 'pick' ? 'pick' : 'pool';
+      if (!name) { alert('그룹 이름을 입력해주세요. 예: 불멍캠프'); nameInput?.focus(); return; }
+      const rooms = mockData.stay.rooms;
+      const members = rooms.filter(room => roomGroupOf(room)?.name === name);
+      const mode = members.length ? roomGroupOf(members[0]).mode : requestedMode;
+      const template = members[members.length - 1] || null;
+      const base = template ? JSON.parse(JSON.stringify(template)) : { price: 15000, base_people: null, max_people: null, extra_person_fee: 0, image_urls: [], feature_summary: [], amenity_details: [], offseason_weekday_price: 15000, offseason_weekend_price: 15000, shoulder_weekday_price: 15000, shoulder_weekend_price: 15000, peak_weekday_price: 15000, peak_weekend_price: 15000, bathroom_count: 0, bathroom_gender_separated: false, bathroom_note: '' };
+      const created = Array.from({ length: count }, (_, i) => ({
+        ...base,
+        id: crypto.randomUUID(),
+        is_active: true,
+        name: `${name} ${members.length + i + 1}`,
+        detail_sections: { ...(base.detail_sections || {}), roomGroup: { name, mode } },
+      }));
+      const lastIndex = members.length ? rooms.lastIndexOf(members[members.length - 1]) : rooms.length - 1;
+      rooms.splice(lastIndex + 1, 0, ...created);
+      if (mode === 'pool') syncPoolGroupMembers();
+      roomGroupAdderOpen = false;
+      rebuildPhotoTabsArray();
+      renderRoomPriceTable();
+      renderPhotoTabs();
+      renderFacilityChips();
+      setRoomGroupStatus(`'${name}' 그룹에 자리 ${count}개를 추가했습니다${members.length ? '' : mode === 'pool' ? ' (자동 배정)' : ' (자리 직접 선택)'}. 요금을 확인하고 아래 저장 버튼을 눌러주세요.`);
+      document.querySelector(`#roomPriceTableBody [data-room-position="${lastIndex + 1}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
     var WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
     var WEEKEND_PRESETS = [
       { label: '금·토', days: [5, 6] },
@@ -3439,6 +3558,7 @@
         if (currentOwnerType === 'admin') return [];
         const stayWeekend = currentOwnerType === 'stay' ? stayWeekendDays() : null;
         const flatPrice = Boolean(stayWeekend && !stayWeekend.length);
+        if (currentOwnerType === 'stay') syncPoolGroupMembers();
         return mockData[currentOwnerType].rooms.map((item, index) => ({
           id: item.id || (item.id = crypto.randomUUID()),
           is_active: item.is_active !== false,
