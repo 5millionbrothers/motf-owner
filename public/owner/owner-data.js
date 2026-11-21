@@ -1212,6 +1212,18 @@
       ? { ...readMarketPolicyFromInputs(), updated_at: new Date().toISOString() }
       : null;
     const hasSettlementValue = window.motfIsBusinessRepresentative() && Boolean(settlementPayload.bank_name || settlementPayload.account_number || settlementPayload.account_holder);
+    const savedSettlement = window.motfCurrentSettlementAccount || {};
+    const settlementEdited = settlementPayload.bank_name !== (savedSettlement.bank_name || "")
+      || settlementPayload.account_number !== (savedSettlement.account_number || "")
+      || (Boolean(savedSettlement.account_holder) && settlementPayload.account_holder !== savedSettlement.account_holder);
+    const settlementSkipped = settlementEdited && Boolean(settlementPayload.bank_name || settlementPayload.account_number)
+      && !(hasSettlementValue && window.motfHasBusinessPermission("settlements"));
+    const ownerPhoneDigits = (document.getElementById("motfOwnerPhone")?.value || "").replace(/[^0-9]/g, "");
+    const ownerPhoneUnsaved = Boolean(ownerPhoneDigits) && ownerPhoneDigits !== String(window.motfCurrentProfile?.phone || "").replace(/[^0-9]/g, "");
+    const saveNotes = () => [
+      settlementSkipped ? "\n\n※ 정산 계좌는 저장되지 않았습니다. 업장 대표 계정으로 로그인해야 정산 계좌를 저장할 수 있어요." : "",
+      ownerPhoneUnsaved ? "\n\n※ 계정 연락처는 이 버튼으로 저장되지 않아요. 연락처 칸 옆 '계정 연락처 저장' 버튼을 따로 눌러주세요." : "",
+    ].join("");
 
     const offeringItems = (business.business_type === 'market' ? [] : window.motfReadOfferingsFromDashboard?.() || []).map((item, index) => ({
       ...item,
@@ -1274,7 +1286,7 @@
         }
         if (hasSettlementValue && window.motfHasBusinessPermission("settlements")) window.motfCurrentSettlementAccount = settlementPayload;
         if (marketPolicyPayload) window.motfCurrentBusiness = { ...window.motfCurrentBusiness, ...marketPolicyPayload };
-        alert("변경 승인 요청을 보냈습니다. 운영팀 승인 전까지 현재 공개 정보가 유지됩니다.");
+        alert("변경 승인 요청을 보냈습니다. 운영팀 승인 전까지 현재 공개 정보가 유지됩니다." + (hasSettlementValue && window.motfHasBusinessPermission("settlements") ? "\n\n정산 계좌는 승인과 상관없이 바로 저장됐습니다." : "") + saveNotes());
         await window.motfUpdateListingReviewUi?.();
         return;
       }
@@ -1311,7 +1323,7 @@
       if (hasSettlementValue && window.motfHasBusinessPermission("settlements")) window.motfCurrentSettlementAccount = settlementPayload;
       window.motfApplyBusinessToDashboard?.(data);
       window.motfSetPartnerOnboarding?.(false);
-      alert("비공개 초안을 저장했습니다. 점검을 마치면 아래 등록 신청 버튼을 눌러주세요.");
+      alert("비공개 초안을 저장했습니다. 점검을 마치면 아래 등록 신청 버튼을 눌러주세요." + saveNotes());
       await window.motfUpdateListingReviewUi?.();
     } catch (error) {
       console.error(error);

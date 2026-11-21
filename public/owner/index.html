@@ -2822,11 +2822,7 @@
     }
 
     function saveMypageData() {
-      const data = mockData[currentOwnerType];
-      data.desc = document.getElementById('editDescInput').value;
-      
-      updatePreviewDisplay();
-      alert('변경사항 저장 및 동기화가 성공적으로 보존되었습니다.');
+      alert('로그인한 업장 정보를 아직 불러오지 못해서 저장하지 않았습니다. 새로고침 후 다시 로그인해서 저장해주세요.');
     }
 
     function updatePreviewDisplay() {
@@ -3906,7 +3902,7 @@
     })();
   </script>
   <link rel="stylesheet" href="/owner/pc-1023.css?v=20261023-v1">
-  <script src="/owner/owner-data.js?v=20261119-receipts"></script>
+  <script src="/owner/owner-data.js?v=20261122-save-notes"></script>
   <script src="/owner/notification-contacts.js?v=20261117-contact-safety"></script>
   <link rel="stylesheet" href="/owner/notification-contacts.css?v=20261117-contact-safety">
   <script src="/owner/admin-contact-inbox.js?v=20261117"></script>
